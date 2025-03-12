@@ -25,13 +25,14 @@ const socialRoutes=require("./Routes/SocialRouter")
 const skillRoutes=require("./Routes/SkillRouter")
 const videoChatRoutes = require('./Routes/ChatRouter');
 const exerciseRoutes = require("./Routes/ApplyRouter");
-
+const logger=require("./middleware/logger")
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
   credentials: true,
   origin: '*' 
 }));
+app.use(logger);
 
 
 app.use("/register", RegisterController);
