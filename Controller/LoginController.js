@@ -3,13 +3,13 @@ const User = require("../Models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const ADMIN_TOKEN_EXPIRATION = "24h"; 
-const USER_TOKEN_EXPIRATION = "24h";  
+// const ADMIN_TOKEN_EXPIRATION = "24h"; 
+// const USER_TOKEN_EXPIRATION = "24h";  
 
 // Generate JWT Token
 const generateToken = (userId, role) => {
-    const expiresIn = role === "admin" ? ADMIN_TOKEN_EXPIRATION : USER_TOKEN_EXPIRATION;
-    return jwt.sign({ userId, role }, process.env.JWT_SECRET, { expiresIn });
+    // const expiresIn = role === "admin" ? ADMIN_TOKEN_EXPIRATION : USER_TOKEN_EXPIRATION;
+    return jwt.sign({ userId, role }, process.env.JWT_SECRET);
 };
 
 const verifyToken = (token) => {
