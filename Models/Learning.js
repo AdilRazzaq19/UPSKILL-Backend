@@ -24,12 +24,41 @@ const UserLearningSchema = new Schema({
         ref: "Module",
         required: true,
       },
+      module_name: {
+        type: String,
+      },
       completed: {
         type: Boolean,
         default: false,
       },
+      videos: [
+        {
+          video_id: {
+            type: Schema.Types.ObjectId,
+            ref: "Video",
+          },
+          video_name: {
+            type: String,
+          },
+          watch_percentage: {
+            type: Number,
+            default: 0,
+          },
+          quiz_completed: {
+            type: Boolean,
+            default: false,
+          },
+          quiz_score: {
+            type: Number,
+            default: 0,
+          },
+          completed_at: {
+            type: Date,
+          },
+        },
+      ],
     },
   ],
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model("UserLearning", UserLearningSchema);

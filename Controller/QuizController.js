@@ -4,12 +4,15 @@ const Video = require("../Models/Video");
 
 const storeQuiz = async (req, res) => {
   const video_id = req.params.video_id;
-
+  
   try {
+    // Fetch MCQs from external API
     const response = await axios.get("http://35.180.225.153/v2/mcqs/", {
       params: { video_id }
     });
-        let mcqArray = [];
+    
+    // Parse and validate MCQ data
+    let mcqArray = [];
     if (Array.isArray(response.data)) {
       mcqArray = response.data;
     } else if (response.data && Array.isArray(response.data.mcqs)) {
@@ -17,6 +20,8 @@ const storeQuiz = async (req, res) => {
     } else {
       return res.status(400).json({ message: "Invalid MCQ data format from external API" });
     }
+    
+    // Transform MCQs to ensure all required fields
     const transformedMCQs = mcqArray.map(mcq => ({
       video_id: mcq.video_id || video_id,
       transcription_id: mcq.transcription_id || "",
@@ -30,29 +35,58 @@ const storeQuiz = async (req, res) => {
       explanation: mcq.explanation || "",
       complexity: mcq.complexity || "Easy"
     }));
+    
+    // Find the video
     const video = await Video.findOne({ youtubeVideo_id: video_id });
     if (!video) {
       return res.status(404).json({ message: "Video not found" });
     }
-
+    
+    // Handle quiz document - first find an existing quiz
     let quizDoc = await Quiz.findOne({ video_id: video_id });
+    let isNewQuiz = false;
+    
     if (quizDoc) {
       quizDoc.mcqs = transformedMCQs;
       await quizDoc.save();
     } else {
+      isNewQuiz = true;
       quizDoc = new Quiz({
         video_id: video_id,
         mcqs: transformedMCQs
       });
       await quizDoc.save();
     }
+    
+    if (video.quizzes && video.quizzes.length > 0) {
+      const existingQuizzes = await Quiz.find({
+        _id: { $in: video.quizzes, $ne: quizDoc._id }
+      });
+            const quizzesWithVideoId = existingQuizzes
+        .filter(quiz => quiz.video_id === video_id)
+        .map(quiz => quiz._id);
+      
+      if (quizzesWithVideoId.length > 0) {
+        video.quizzes = video.quizzes.filter(
+          qId => !quizzesWithVideoId.some(id => id.toString() === qId.toString())
+        );
+        await Quiz.updateMany(
+          { _id: { $in: quizzesWithVideoId } },
+          { $set: { isObsolete: true } }
+        );
+      }
+    }
+    
     if (!video.quizzes.some(id => id.toString() === quizDoc._id.toString())) {
       video.quizzes.push(quizDoc._id);
-      await video.save();
     }
-
+    
+    await video.save();
+    
     res.status(200).json({
-      message: "MCQs stored successfully and linked to video",
+      message: isNewQuiz 
+        ? "New MCQs stored successfully and linked to video" 
+        : "Existing MCQs updated successfully",
       quiz: quizDoc,
       count: transformedMCQs.length
     });

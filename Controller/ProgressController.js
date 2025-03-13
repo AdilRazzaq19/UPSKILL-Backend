@@ -320,24 +320,21 @@ const completeModule = async (req, res) => {
       monthlyEntry.points += pointsEarned;
     } else {
       progress.monthly_points.push({ month: monthLabel, points: pointsEarned });
-    }
-  
-    const videosInModule = await Video.find({ module_id: module_id }, "learnedSkills");
-    let moduleLearnedSkills = [];
-    videosInModule.forEach(video => {
-      if (video.learnedSkills && video.learnedSkills.length > 0) {
-        moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills.map(id => id.toString()));
+    }  
+
+      const videosInModule = await Video.find({ module_id: module_id }, "learnedSkills");
+      let moduleLearnedSkills = [];
+      videosInModule.forEach(video => {
+        if (video.learnedSkills && video.learnedSkills.length > 0) {
+          moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
+        }
+      });
+      if (!progress.learnedSkills) {
+        progress.learnedSkills = [];
       }
-    });
-    moduleLearnedSkills = [...new Set(moduleLearnedSkills)];
-  
-    progress.learnedSkills = Array.from(new Set([
-      ...((progress.learnedSkills || []).map(id => id.toString())),
-      ...moduleLearnedSkills
-    ]));
-  
-    await progress.save();
-    await userLearning.save();
+      progress.learnedSkills = progress.learnedSkills.concat(moduleLearnedSkills);
+      await progress.save();
+      await userLearning.save();
   
     const fullBadges = await Badge.find(
       { _id: { $in: progress.badges } },

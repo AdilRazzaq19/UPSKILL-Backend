@@ -1,18 +1,18 @@
 const express = require("express");
 const router = express.Router();
-const {authMiddleware} = require("../middleware/auth.middleware");
+const { authMiddleware } = require("../middleware/auth.middleware");
 const {
-  addUserLearningBySection,
+  addUserLearningByModule,
   getUserLearningProgress,
-  getAllLearningSections,
+  getAllLearningModules,
   updateUserLearningProgress,
-  removeUserLearningSection
+  removeUserLearningModule
 } = require("../Controller/LearningController");
 
-router.post("/addBySection", authMiddleware,addUserLearningBySection);
-router.get("/getAll", authMiddleware,getUserLearningProgress);
-router.get("/getLearningSections",authMiddleware,getAllLearningSections);
-router.patch("/update-progress", authMiddleware,updateUserLearningProgress);
-router.delete("/:user_id/:section_id", authMiddleware,removeUserLearningSection);
+router.post("/addByModule", authMiddleware, addUserLearningByModule);
+router.get("/getAll", authMiddleware, getUserLearningProgress);
+router.get("/getLearningModules", authMiddleware, getAllLearningModules);
+router.patch("/update-progress", authMiddleware, updateUserLearningProgress);
+router.delete("/module/:module_id", authMiddleware, removeUserLearningModule);
 
 module.exports = router;
