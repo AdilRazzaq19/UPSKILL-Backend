@@ -4,7 +4,6 @@ const Exercise = require("../Models/ApplyandOwnit");
 
 exports.validateExercisePayload = (req, res, next) => {
   const {
-    user_id,
     video_id,
     user_role,
     department,
@@ -15,8 +14,15 @@ exports.validateExercisePayload = (req, res, next) => {
     company_size,
   } = req.body;
 
+  // Ensure the user is authenticated and token was decoded
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized. User token not found.",
+    });
+  }
+
   if (
-    !user_id ||
     !video_id ||
     !user_role ||
     !department ||
@@ -31,6 +37,9 @@ exports.validateExercisePayload = (req, res, next) => {
       message: "Invalid payload. Please provide all required fields.",
     });
   }
+
+  // Attach the user id from token to the payload
+  req.body.user_id = req.user.id;
   next();
 };
 
