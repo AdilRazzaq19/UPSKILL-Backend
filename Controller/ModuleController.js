@@ -67,7 +67,7 @@ const Section = require("../Models/Section");
         })
         .populate({
           path: "video",
-          select: "_id youtubeVideo_id video_url"
+          select: "_id youtubeVideo_id video_url channel_name"
         });
   
       res.status(200).json(modules);

@@ -6,10 +6,12 @@ const {
   getUserLearningProgress,
   getAllLearningModules,
   updateUserLearningProgress,
-  removeUserLearningModule
+  removeUserLearningModule,
+  addUserLearningByUniqueModule
 } = require("../Controller/LearningController");
 
 router.post("/addByModule", authMiddleware, addUserLearningByModule);
+router.post("/addByUniqueModule", authMiddleware, addUserLearningByUniqueModule);
 router.get("/getAll", authMiddleware, getUserLearningProgress);
 router.get("/getLearningModules", authMiddleware, getAllLearningModules);
 router.patch("/update-progress", authMiddleware, updateUserLearningProgress);
