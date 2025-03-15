@@ -70,5 +70,64 @@ const RegisterUser = async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 };
-
-module.exports = { RegisterAdmin, RegisterUser };
+const updateUserName = async (req, res) => {
+    try {
+      const userId = req.user._id; // assumes req.user is set for authenticated user
+      const { username } = req.body;
+  
+      if (!username || username.trim() === "") {
+        return res.status(400).json({ message: "Username is required." });
+      }
+  
+      // Update the username and return the updated document
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { username },
+        { new: true }
+      );
+  
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found." });
+      }
+  
+      res.status(200).json({
+        message: "Username updated successfully.",
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("Error updating user username:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  };
+  
+  // Update the username for an admin
+  const updateAdminName = async (req, res) => {
+    try {
+      const adminId = req.user._id; // assumes req.user is set for authenticated admin
+      const { username } = req.body;
+  
+      if (!username || username.trim() === "") {
+        return res.status(400).json({ message: "Username is required." });
+      }
+  
+      // Update the username and return the updated document
+      const updatedAdmin = await Admin.findByIdAndUpdate(
+        adminId,
+        { username },
+        { new: true }
+      );
+  
+      if (!updatedAdmin) {
+        return res.status(404).json({ message: "Admin not found." });
+      }
+  
+      res.status(200).json({
+        message: "Admin username updated successfully.",
+        admin: updatedAdmin,
+      });
+    } catch (error) {
+      console.error("Error updating admin username:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  };
+module.exports = { RegisterAdmin, RegisterUser, updateAdminName,updateUserName };
