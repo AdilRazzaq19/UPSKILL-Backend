@@ -169,25 +169,38 @@ const deleteModule = async (req, res) => {
 };
 
 
-const getThirtyModules = async (req, res) => {
+const getModuleDetailsByUniqueModuleId = async (req, res) => {
   try {
-    const modules = await Module.find({
-      unique_ModuleID: { $regex: /^M00(0[2-9]|[1-2]\d|32)$/i }
-    }).sort({ unique_ModuleID: 1 });
+    const { unique_ModuleID } = req.body;
+    if (!unique_ModuleID) {
+      return res.status(400).json({ message: "unique_ModuleID is required in the payload." });
+    }
+
+    const moduleData = await Module.findOne({ unique_ModuleID })
+      .populate("section_id", "name")
+      .populate("video", "title");
+
+    if (!moduleData) {
+      return res.status(404).json({ message: "Module not found." });
+    }
+
+    const response = {
+      moduleName: moduleData.name,
+      sectionName: moduleData.section_id ? moduleData.section_id.name : null,
+      videoTitle: moduleData.video ? moduleData.video.title : null,
+      moduleDescription:moduleData.description,
+
+    };
 
     res.status(200).json({
-      message: "Modules from m0002 to m0032 fetched successfully.",
-      data: modules,
+      message: "Module details fetched successfully.",
+      module: response,
     });
   } catch (error) {
-    console.error("Error fetching modules:", error.message);
-    res.status(500).json({
-      message: "Internal Server Error",
-      error: error.message
-    });
+    console.error("Error fetching module details:", error.message);
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 
 
 
@@ -198,5 +211,5 @@ module.exports = {
   updateModule, 
   deleteModule, 
   getModulesBySectionId,
-  getThirtyModules,
+  getModuleDetailsByUniqueModuleId
 };
