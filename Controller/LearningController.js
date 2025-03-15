@@ -119,12 +119,9 @@ const addUserLearningByUniqueModule = async (req, res) => {
     const user_id = req.user.id;
     const { module_id } = req.body;
 
-    // Validate that a module ID is provided
     if (!module_id) {
       return res.status(400).json({ message: "Module ID is required." });
     }
-
-    // Find the module using its unique module identifier and populate its section and theme
     const moduleDoc = await Module.findOne({ unique_ModuleID: module_id }).populate({
       path: "section_id",
       populate: { path: "theme_id" }
@@ -146,20 +143,12 @@ const addUserLearningByUniqueModule = async (req, res) => {
     const uniqueModuleID = moduleDoc.unique_ModuleID;
     const theme_id = moduleDoc.section_id.theme_id._id;
     const theme_name = moduleDoc.section_id.theme_id.name;
-
-    // Retrieve the UserLearning record for this user and section.
     let userLearning = await UserLearning.findOne({ user_id, section_id });
     if (userLearning) {
       console.log("Found existing UserLearning record:", userLearning._id.toString());
       console.log("moduleDoc.unique_ModuleID:", uniqueModuleID);
-
-      // Remove any invalid modules (missing unique_ModuleID) to avoid validation errors.
       userLearning.modules = userLearning.modules.filter(mod => mod.unique_ModuleID);
-
-      // Populate the ai_recommendation array so that stored unique_ModuleID values are available.
       await userLearning.populate("ai_recommendation.module_id");
-
-      // Check if the module already exists in the user-preferred modules array
       let existsInModules = false;
       for (const mod of userLearning.modules) {
         console.log("modules - stored unique_ModuleID:", mod.unique_ModuleID);
@@ -186,7 +175,6 @@ const addUserLearningByUniqueModule = async (req, res) => {
       }
     } else {
       console.log("No existing UserLearning record for section:", section_name);
-      // Create a new UserLearning record for this section.
       userLearning = new UserLearning({
         user_id,
         theme_id,
@@ -195,8 +183,6 @@ const addUserLearningByUniqueModule = async (req, res) => {
         ai_recommendation: []
       });
     }
-
-    // Add the module to the user-preferred modules array with its unique_ModuleID.
     userLearning.modules.push({
       module_id: moduleDoc._id,
       unique_ModuleID: uniqueModuleID,
@@ -205,8 +191,6 @@ const addUserLearningByUniqueModule = async (req, res) => {
     });
     await userLearning.save();
     console.log("Module added to UserLearning for section:", section_name);
-
-    // Update user progress (create or update)
     let userProgress = await UserProgress.findOne({ user_id });
     if (!userProgress) {
       userProgress = new UserProgress({
@@ -237,6 +221,55 @@ const addUserLearningByUniqueModule = async (req, res) => {
   } catch (error) {
     console.error("Error adding module to learning:", error);
     res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+
+const checkUserLearningModule = async (req, res) => {
+  try {
+    const user_id = req.user.id; // or req.user._id, depending on your middleware
+    const { module_id } = req.body;
+
+    if (!module_id) {
+      return res.status(400).json({ exists: false, message: "Module ID is required." });
+    }
+
+    // Find the module using its unique module identifier and populate its section and theme.
+    const moduleDoc = await Module.findOne({ unique_ModuleID: module_id }).populate({
+      path: "section_id",
+      populate: { path: "theme_id" }
+    });
+
+    if (!moduleDoc) {
+      return res.status(404).json({ exists: false, message: "Module not found." });
+    }
+    if (!moduleDoc.section_id) {
+      return res.status(404).json({ exists: false, message: "Section not found for this module." });
+    }
+
+    // Retrieve the UserLearning record for this user and the module's section.
+    let userLearning = await UserLearning.findOne({ user_id, section_id: moduleDoc.section_id._id });
+    if (!userLearning) {
+      // No learning record means the module isn't stored.
+      return res.status(200).json({ exists: false, message: "Module does not exist in your learning preferences." });
+    }
+
+    // Check if the module exists in either the user-preferred modules or AI-recommended modules arrays.
+    const existsInModules = userLearning.modules.some(
+      mod => mod.unique_ModuleID === moduleDoc.unique_ModuleID
+    );
+    const existsInAIRec = userLearning.ai_recommendation.some(
+      mod => mod.unique_ModuleID === moduleDoc.unique_ModuleID
+    );
+
+    if (existsInModules || existsInAIRec) {
+      return res.status(200).json({ exists: true, message: "Module already exists in your learning preferences." });
+    } else {
+      return res.status(200).json({ exists: false, message: "Module does not exist in your learning preferences." });
+    }
+  } catch (error) {
+    console.error("Error checking user learning module:", error);
+    res.status(500).json({ exists: false, message: "Internal server error", error: error.message });
   }
 };
 
@@ -431,6 +464,7 @@ const removeUserLearningModule = async (req, res) => {
 module.exports = {
   addUserLearningByModule,
   addUserLearningByUniqueModule,
+  checkUserLearningModule,
   getUserLearningProgress,
   updateUserLearningProgress,
   removeUserLearningModule
