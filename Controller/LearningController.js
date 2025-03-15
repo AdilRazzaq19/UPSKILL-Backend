@@ -2,92 +2,84 @@ const mongoose = require("mongoose");
 const UserLearning = require("../Models/Learning");
 const Section = require("../Models/Section");
 const Module = require("../Models/Module");
-const Video = require("../Models/Video");
 const UserProgress = require("../Models/userProgress");
-const Theme = require("../Models/Theme");
 
+// Add a module by its Mongo _id (from the database)
 const addUserLearningByModule = async (req, res) => {
   try {
     const user_id = req.user.id;
     const { module_id } = req.body;
 
-    // Validate module ID
+    // Validate that a module ID is provided and that it's a valid ObjectId
     if (!module_id || !mongoose.Types.ObjectId.isValid(module_id)) {
       return res.status(400).json({ message: "Invalid module ID provided." });
     }
 
-    // Find the module with its section
-    const module = await Module.findById(module_id).populate({
+    // Find the module by its _id (not by a "module_id" field) and populate its section and theme
+    const moduleDoc = await Module.findById(module_id).populate({
       path: "section_id",
       populate: { path: "theme_id" }
     });
 
-    if (!module) {
+    if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found" });
     }
-
-    // Check if section_id exists
-    if (!module.section_id) {
+    if (!moduleDoc.section_id) {
       return res.status(404).json({ message: "Section not found for this module" });
     }
-
-    const section_id = module.section_id._id;
-    const section_name = module.section_id.name;
-    const module_name = module.name;
-    
-    // Check if theme_id exists in the section
-    if (!module.section_id.theme_id) {
+    if (!moduleDoc.section_id.theme_id) {
       return res.status(404).json({ message: "Theme not found for this section" });
     }
-    
-    const theme_id = module.section_id.theme_id._id;
-    const theme_name = module.section_id.theme_id.name;
 
-    // Get all videos for the module
-    const videos = await Video.find({ module_id: module._id });
-    const formattedVideos = videos.map(video => ({
-      video_id: video._id,
-      video_name: video.title || video.name,
-      watch_percentage: 0,
-      quiz_completed: false,
-      quiz_score: 0
-    }));
+    const section_id = moduleDoc.section_id._id;
+    const section_name = moduleDoc.section_id.name;
+    const modName = moduleDoc.name;
+    const uniqueModuleID = moduleDoc.unique_ModuleID;
+    const theme_id = moduleDoc.section_id.theme_id._id;
+    const theme_name = moduleDoc.section_id.theme_id.name;
 
-    // Check if user has already added this module
-    let existingLearning = await UserLearning.findOne({
-      user_id,
-      "modules.module_id": module_id
-    });
+    // Log the details
+      console.log("Section ID:", section_id);
+      console.log("Section Name:", section_name);
+      console.log("Module Name:", modName);
+      console.log("Unique Module ID:", uniqueModuleID);
+      console.log("Theme ID:", theme_id);
+      console.log("Theme Name:", theme_name);
 
+      let existingLearning = await UserLearning.findOne({
+        user_id,
+        section_id,
+        $or: [
+          { "modules.module_id": moduleDoc._id },
+          { "ai_recommendation.module_id": moduleDoc._id }
+        ]
+      });
     if (existingLearning) {
       return res.status(400).json({ message: "This module is already in your learning list." });
     }
 
-    // Check if the section exists in user's learning
-    let userLearning = await UserLearning.findOne({
-      user_id,
-      section_id
-    });
-
-    // If the section doesn't exist in user's learning, create a new entry
+    let userLearning = await UserLearning.findOne({ user_id, section_id });
     if (!userLearning) {
       userLearning = new UserLearning({
         user_id,
         theme_id,
         section_id,
-        modules: []
+        modules: [],
+        ai_recommendation: []
       });
     }
 
-    // Add the module to user's learning
+    // Add the module to the user-preferred modules array (including unique_ModuleID for schema compliance)
     userLearning.modules.push({
-      module_id,
-      module_name,
+      module_id: moduleDoc._id,
+      unique_ModuleID: uniqueModuleID,
+      module_name: modName,
       completed: false,
-      videos: formattedVideos
+      // videos: formattedVideos, // If you want to include videos, otherwise remove this line.
     });
 
     await userLearning.save();
+    console.log("Module added to UserLearning for section:", section_name);
 
     // Update user progress
     let userProgress = await UserProgress.findOne({ user_id });
@@ -98,19 +90,15 @@ const addUserLearningByModule = async (req, res) => {
         completed_modules: []
       });
     }
-
-    // Check if section already exists in progress
-    const existingSection = userProgress.section_progress.find(
+    const sectionExists = userProgress.section_progress.find(
       sec => sec.section_id.toString() === section_id.toString()
     );
-
-    if (!existingSection) {
+    if (!sectionExists) {
       userProgress.section_progress.push({
         section_id,
         status: "in_progress"
       });
     }
-
     await userProgress.save();
 
     res.status(201).json({
@@ -118,8 +106,7 @@ const addUserLearningByModule = async (req, res) => {
       data: {
         theme: theme_name,
         section: section_name,
-        module: module_name,
-        videos: formattedVideos
+        module: modName,
       }
     });
   } catch (error) {
@@ -127,91 +114,99 @@ const addUserLearningByModule = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 const addUserLearningByUniqueModule = async (req, res) => {
   try {
     const user_id = req.user.id;
     const { module_id } = req.body;
 
-    // Validate module ID (ensure it's provided)
+    // Validate that a module ID is provided
     if (!module_id) {
       return res.status(400).json({ message: "Module ID is required." });
     }
 
-    // Find the module using the unique module identifier
-    const module = await Module.findOne({ unique_ModuleID: module_id }).populate({
+    // Find the module using its unique module identifier and populate its section and theme
+    const moduleDoc = await Module.findOne({ unique_ModuleID: module_id }).populate({
       path: "section_id",
       populate: { path: "theme_id" }
     });
 
-    if (!module) {
+    if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found" });
     }
-
-    // Check if the module has an associated section
-    if (!module.section_id) {
+    if (!moduleDoc.section_id) {
       return res.status(404).json({ message: "Section not found for this module" });
     }
-
-    const section_id = module.section_id._id;
-    const section_name = module.section_id.name;
-    const module_name = module.name;
-
-    // Check if the section has an associated theme
-    if (!module.section_id.theme_id) {
+    if (!moduleDoc.section_id.theme_id) {
       return res.status(404).json({ message: "Theme not found for this section" });
     }
-    
-    const theme_id = module.section_id.theme_id._id;
-    const theme_name = module.section_id.theme_id.name;
 
-    // Get all videos for the module
-    const videos = await Video.find({ module_id: module._id });
-    const formattedVideos = videos.map(video => ({
-      video_id: video._id,
-      video_name: video.title || video.name,
-      watch_percentage: 0,
-      quiz_completed: false,
-      quiz_score: 0
-    }));
+    const section_id = moduleDoc.section_id._id;
+    const section_name = moduleDoc.section_id.name;
+    const modName = moduleDoc.name;
+    const uniqueModuleID = moduleDoc.unique_ModuleID;
+    const theme_id = moduleDoc.section_id.theme_id._id;
+    const theme_name = moduleDoc.section_id.theme_id.name;
 
-    // Check if user has already added this module (using module._id from the found document)
-    let existingLearning = await UserLearning.findOne({
-      user_id,
-      "modules.module_id": module._id
-    });
+    // Retrieve the UserLearning record for this user and section.
+    let userLearning = await UserLearning.findOne({ user_id, section_id });
+    if (userLearning) {
+      console.log("Found existing UserLearning record:", userLearning._id.toString());
+      console.log("moduleDoc.unique_ModuleID:", uniqueModuleID);
 
-    if (existingLearning) {
-      return res.status(400).json({ message: "This module is already in your learning list." });
-    }
+      // Remove any invalid modules (missing unique_ModuleID) to avoid validation errors.
+      userLearning.modules = userLearning.modules.filter(mod => mod.unique_ModuleID);
 
-    // Check if the section exists in user's learning
-    let userLearning = await UserLearning.findOne({
-      user_id,
-      section_id
-    });
+      // Populate the ai_recommendation array so that stored unique_ModuleID values are available.
+      await userLearning.populate("ai_recommendation.module_id");
 
-    // If the section doesn't exist, create a new learning entry for this section
-    if (!userLearning) {
+      // Check if the module already exists in the user-preferred modules array
+      let existsInModules = false;
+      for (const mod of userLearning.modules) {
+        console.log("modules - stored unique_ModuleID:", mod.unique_ModuleID);
+        if (mod.unique_ModuleID === uniqueModuleID) {
+          existsInModules = true;
+          break;
+        }
+      }
+      let existsInAIRec = false;
+      for (const mod of userLearning.ai_recommendation) {
+        console.log("ai_recommendation - stored unique_ModuleID:", mod.unique_ModuleID);
+        if (mod.unique_ModuleID === uniqueModuleID) {
+          existsInAIRec = true;
+          break;
+        }
+      }
+      console.log("existsInModules:", existsInModules, "existsInAIRec:", existsInAIRec);
+
+      if (existsInModules) {
+        return res.status(400).json({ message: "This module is already in your user learning preferences." });
+      }
+      if (existsInAIRec) {
+        return res.status(400).json({ message: "This module is already in your AI recommended list." });
+      }
+    } else {
+      console.log("No existing UserLearning record for section:", section_name);
+      // Create a new UserLearning record for this section.
       userLearning = new UserLearning({
         user_id,
         theme_id,
         section_id,
-        modules: []
+        modules: [],
+        ai_recommendation: []
       });
     }
 
-    // Add the module to user's learning
+    // Add the module to the user-preferred modules array with its unique_ModuleID.
     userLearning.modules.push({
-      module_id: module._id,
-      module_name,
+      module_id: moduleDoc._id,
+      unique_ModuleID: uniqueModuleID,
+      module_name: modName,
       completed: false,
-      videos: formattedVideos
     });
-
     await userLearning.save();
+    console.log("Module added to UserLearning for section:", section_name);
 
-    // Update user progress (create if it doesn't exist)
+    // Update user progress (create or update)
     let userProgress = await UserProgress.findOne({ user_id });
     if (!userProgress) {
       userProgress = new UserProgress({
@@ -220,19 +215,15 @@ const addUserLearningByUniqueModule = async (req, res) => {
         completed_modules: []
       });
     }
-
-    // Check if the section already exists in the user's progress
-    const existingSection = userProgress.section_progress.find(
+    const sectionExists = userProgress.section_progress.find(
       sec => sec.section_id.toString() === section_id.toString()
     );
-
-    if (!existingSection) {
+    if (!sectionExists) {
       userProgress.section_progress.push({
         section_id,
         status: "in_progress"
       });
     }
-
     await userProgress.save();
 
     res.status(201).json({
@@ -240,8 +231,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
       data: {
         theme: theme_name,
         section: section_name,
-        module: module_name,
-        videos: formattedVideos
+        module: modName,
       }
     });
   } catch (error) {
@@ -249,6 +239,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 const getUserLearningProgress = async (req, res) => {
   try {
@@ -262,230 +253,132 @@ const getUserLearningProgress = async (req, res) => {
         select: "name"
       })
       .populate({
-        path: "modules.videos.video_id",
-        select: "title name duration"
+        path: "ai_recommendation.module_id",
+        select: "name"
       });
 
     if (!userLearning.length) {
       return res.status(404).json({ message: "No learning progress found for this user" });
     }
 
-    // Format the response to include theme, section, module and video details
-    const formattedResponse = userLearning.map(learning => {
+    let totalModuleCount = 0;
+    let totalAiRecommendationCount = 0;
+
+    // Format the response to include theme, section, module details and counts per record
+    const formattedProgress = userLearning.map(learning => {
+      const moduleCount = learning.modules.length;
+      const aiRecommendationCount = learning.ai_recommendation.length;
+
+      // Aggregate totals across all sections
+      totalModuleCount += moduleCount;
+      totalAiRecommendationCount += aiRecommendationCount;
+
       return {
         _id: learning._id,
-        theme: learning.theme_id ? {
-          id: learning.theme_id._id,
-          name: learning.theme_id.name
-        } : { id: null, name: "Unknown Theme" },
-        section: learning.section_id ? {
-          id: learning.section_id._id,
-          name: learning.section_id.name
-        } : { id: null, name: "Unknown Section" },
-        modules: learning.modules.map(module => {
-          if (!module.module_id) {
-            return {
-              id: null,
-              name: module.module_name || "Unknown Module",
-              completed: module.completed,
-              videos: module.videos ? module.videos.map(video => {
-              return {
-                id: video.video_id ? video.video_id._id : null,
-                name: video.video_id ? (video.video_id.title || video.video_id.name) : video.video_name,
-                watch_percentage: video.watch_percentage,
-                quiz_completed: video.quiz_completed,
-                quiz_score: video.quiz_score,
-                completed_at: video.completed_at,
-                duration: video.video_id ? video.video_id.duration : null
-              };
-            }) : []
-          };
-          }
-          
-          return {
-            id: module.module_id._id,
-            name: module.module_id.name || module.module_name || "Unknown Module",
-            completed: module.completed,
-            videos: module.videos ? module.videos.map(video => {
-              return {
-                id: video.video_id ? video.video_id._id : null,
-                name: video.video_id ? (video.video_id.title || video.video_id.name) : video.video_name || "Unknown Video",
-                watch_percentage: video.watch_percentage,
-                quiz_completed: video.quiz_completed,
-                quiz_score: video.quiz_score,
-                completed_at: video.completed_at,
-                duration: video.video_id ? video.video_id.duration : null
-              };
-            }) : []
-          };
-        })
+        theme: learning.theme_id
+          ? { id: learning.theme_id._id, name: learning.theme_id.name }
+          : { id: null, name: "Unknown Theme" },
+        section: learning.section_id
+          ? { id: learning.section_id._id, name: learning.section_id.name }
+          : { id: null, name: "Unknown Section" },
+        modules: learning.modules.map(mod => ({
+          id: mod.module_id ? mod.module_id._id : null,
+          name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
+          completed: mod.completed
+        })),
+        ai_recommendation: learning.ai_recommendation.map(mod => ({
+          id: mod.module_id ? mod.module_id._id : null,
+          name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
+          completed: mod.completed
+        })),
+        moduleCount,
+        aiRecommendationCount
       };
     });
 
-    res.status(200).json(formattedResponse);
+    return res.status(200).json({
+      totalModuleCount,
+      totalAiRecommendationCount,
+      learningProgress: formattedProgress
+    });
   } catch (error) {
     console.error("Error getting learning progress:", error);
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 
-const getAllLearningModules = async (req, res) => {
-  try {
-    const user_id = req.user.id;
 
-    // Find all user learning records
-    const learningRecords = await UserLearning.find({ user_id })
-      .populate("theme_id", "name")
-      .populate("section_id", "name")
-      .populate({
-        path: "modules.module_id",
-        select: "name"
-      });
 
-    if (!learningRecords.length) {
-      return res.status(404).json({ message: "No modules added for learning." });
-    }
 
-    // Format the response to include all modules
-    const learningModules = [];
-    
-          learningRecords.forEach(record => {
-      if (!record.theme_id || !record.section_id) {
-        return; // Skip records with missing theme or section
-      }
-      
-      record.modules.forEach(module => {
-        if (!module.module_id) {
-          return;
-        }
-        
-        learningModules.push({
-          theme_id: record.theme_id._id,
-          theme_name: record.theme_id.name,
-          section_id: record.section_id._id,
-          section_name: record.section_id.name,
-          module_id: module.module_id._id,
-          module_name: module.module_id.name || module.module_name || "Unknown Module",
-          completed: module.completed,
-          video_count: module.videos ? module.videos.length : 0,
-          completed_videos: module.videos ? 
-            module.videos.filter(v => v.watch_percentage === 100).length : 0
-        });
-      });
-    });
-
-    res.status(200).json({ learningModules });
-  } catch (error) {
-    console.error("Error retrieving learning modules:", error);
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
-  }
-};
 
 const updateUserLearningProgress = async (req, res) => {
   try {
     const user_id = req.user.id;
-    const { module_id, video_id, watch_percentage, quiz_completed, quiz_score } = req.body;
+    const { module_id } = req.body;
 
-    // Validate required fields
-    if (!module_id || !video_id) {
-      return res.status(400).json({ message: "Module ID and Video ID are required" });
+    // Validate required field
+    if (!module_id) {
+      return res.status(400).json({ message: "Module ID is required" });
     }
 
-    // Find the user learning record that contains the module
+    // For this update, we only mark a module as completed (since our schema no longer has videos)
     let userLearning = await UserLearning.findOne({
       user_id,
       "modules.module_id": module_id
     });
-
     if (!userLearning) {
       return res.status(404).json({ message: "User learning record not found for this module" });
     }
 
-    // Find the module in the modules array
     const moduleIndex = userLearning.modules.findIndex(
       mod => mod.module_id.toString() === module_id
     );
-
     if (moduleIndex === -1) {
       return res.status(404).json({ message: "Module not found in user learning" });
     }
 
-    // Find the video in the videos array
-    const videoIndex = userLearning.modules[moduleIndex].videos.findIndex(
-      vid => vid.video_id.toString() === video_id
-    );
-
-    if (videoIndex === -1) {
-      return res.status(404).json({ message: "Video not found in module" });
-    }
-
-    // Update the video progress
-    if (watch_percentage !== undefined) {
-      userLearning.modules[moduleIndex].videos[videoIndex].watch_percentage = watch_percentage;
-    }
-    
-    if (quiz_completed !== undefined) {
-      userLearning.modules[moduleIndex].videos[videoIndex].quiz_completed = quiz_completed;
-    }
-    
-    if (quiz_score !== undefined) {
-      userLearning.modules[moduleIndex].videos[videoIndex].quiz_score = quiz_score;
-    }
-
-    // Set completed_at if watch_percentage is 100%
-    if (watch_percentage === 100) {
-      userLearning.modules[moduleIndex].videos[videoIndex].completed_at = new Date();
-    }
-
-    // Check if all videos are completed and update module completion status
-    const allVideosCompleted = userLearning.modules[moduleIndex].videos.every(
-      video => video.watch_percentage === 100
-    );
-
-    if (allVideosCompleted) {
-      userLearning.modules[moduleIndex].completed = true;
-
-      // Update user progress to add to completed modules
-      let userProgress = await UserProgress.findOne({ user_id });
-      
-      if (userProgress) {
-        const moduleExists = userProgress.completed_modules.some(
-          mod => mod.module_id.toString() === module_id
-        );
-
-        if (!moduleExists) {
-          userProgress.completed_modules.push({
-            module_id,
-            completed_at: new Date()
-          });
-          await userProgress.save();
-        }
-      }
-      const allModulesInSectionCompleted = userLearning.modules.every(
-        mod => mod.completed
-      );
-
-      if (allModulesInSectionCompleted) {
-        let userProgress = await UserProgress.findOne({ user_id });
-        
-        if (userProgress) {
-          const sectionProgressIndex = userProgress.section_progress.findIndex(
-            sec => sec.section_id.toString() === userLearning.section_id.toString()
-          );
-
-          if (sectionProgressIndex !== -1) {
-            userProgress.section_progress[sectionProgressIndex].status = "completed";
-            await userProgress.save();
-          }
-        }
-      }
-    }
+    // Mark the module as completed
+    userLearning.modules[moduleIndex].completed = true;
 
     await userLearning.save();
 
-    res.status(200).json({ 
-      message: "Progress updated successfully", 
-      module_completed: userLearning.modules[moduleIndex].completed 
+    // Update user progress: add module to completed_modules if not already there,
+    // and if all modules in the section are completed, mark the section as completed.
+    let userProgress = await UserProgress.findOne({ user_id });
+    if (!userProgress) {
+      userProgress = new UserProgress({
+        user_id,
+        section_progress: [],
+        completed_modules: []
+      });
+    }
+    const moduleExists = userProgress.completed_modules.some(
+      mod => mod.module_id.toString() === module_id
+    );
+    if (!moduleExists) {
+      userProgress.completed_modules.push({
+        module_id,
+        completed_at: new Date()
+      });
+      await userProgress.save();
+    }
+    const allModulesCompleted = userLearning.modules.every(mod => mod.completed);
+    if (allModulesCompleted) {
+      let up = await UserProgress.findOne({ user_id });
+      if (up) {
+        const sectionIndex = up.section_progress.findIndex(
+          sec => sec.section_id.toString() === userLearning.section_id.toString()
+        );
+        if (sectionIndex !== -1) {
+          up.section_progress[sectionIndex].status = "completed";
+          await up.save();
+        }
+      }
+    }
+
+    res.status(200).json({
+      message: "Progress updated successfully",
+      module_completed: userLearning.modules[moduleIndex].completed
     });
   } catch (error) {
     console.error("Error updating learning progress:", error);
@@ -513,19 +406,16 @@ const removeUserLearningModule = async (req, res) => {
     );
     if (userLearning.modules.length === 0) {
       await UserLearning.deleteOne({ _id: userLearning._id });
-
       await UserProgress.updateOne(
         { user_id },
         { $pull: { section_progress: { section_id: userLearning.section_id } } }
       );
-
       return res.status(200).json({ message: "Module removed successfully. No modules remain in this section." });
     } else {
-      // Save the updated learning record
       await userLearning.save();
     }
 
-    // Remove the module from completed_modules in UserProgress if exists
+    // Remove the module from completed_modules in UserProgress if it exists
     await UserProgress.updateOne(
       { user_id },
       { $pull: { completed_modules: { module_id } } }
@@ -540,9 +430,8 @@ const removeUserLearningModule = async (req, res) => {
 
 module.exports = {
   addUserLearningByModule,
+  addUserLearningByUniqueModule,
   getUserLearningProgress,
-  getAllLearningModules,
   updateUserLearningProgress,
-  removeUserLearningModule,
-  addUserLearningByUniqueModule
+  removeUserLearningModule
 };

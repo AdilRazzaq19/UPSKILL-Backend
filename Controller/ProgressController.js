@@ -188,12 +188,24 @@ const completeModule = async (req, res) => {
     }
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
-    userLearning.modules.forEach(module => {
-      if (module.module_id.toString() === module_id) {
-        module.completed = true;
-        module.video_progress = 100;
+    // Update completion status in the userLearning record
+    userLearning.modules.forEach(mod => {
+      if (mod.module_id.toString() === module_id) {
+        mod.completed = true;
+        mod.video_progress = 100;
       }
     });
+    // Mark the 'modules' array as modified
+    userLearning.markModified('modules');
+  
+    userLearning.ai_recommendation.forEach(mod => {
+      if (mod.module_id.toString() === module_id) {
+        mod.completed = true;
+        mod.video_progress = 100;
+      }
+    });
+    // Mark the 'ai_recommendation' array as modified
+    userLearning.markModified('ai_recommendation');
   
     await updateStreaks(progress);
     await allocateModuleThresholdBadges(progress);
@@ -229,7 +241,7 @@ const completeModule = async (req, res) => {
       }
     }
   
-    // If section is fully completed, award section badges.
+    // Award section badges if fully completed
     if (sectionJustCompleted) {
       const sectionBadges = await Badge.find({ type: "Section Completion" });
       sectionBadges.forEach(sectionBadge => {
@@ -320,21 +332,21 @@ const completeModule = async (req, res) => {
       monthlyEntry.points += pointsEarned;
     } else {
       progress.monthly_points.push({ month: monthLabel, points: pointsEarned });
-    }  
-
-      const videosInModule = await Video.find({ module_id: module_id }, "learnedSkills");
-      let moduleLearnedSkills = [];
-      videosInModule.forEach(video => {
-        if (video.learnedSkills && video.learnedSkills.length > 0) {
-          moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
-        }
-      });
-      if (!progress.learnedSkills) {
-        progress.learnedSkills = [];
+    }
+  
+    const videosInModule = await Video.find({ module_id: module_id }, "learnedSkills");
+    let moduleLearnedSkills = [];
+    videosInModule.forEach(video => {
+      if (video.learnedSkills && video.learnedSkills.length > 0) {
+        moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
       }
-      progress.learnedSkills = progress.learnedSkills.concat(moduleLearnedSkills);
-      await progress.save();
-      await userLearning.save();
+    });
+    if (!progress.learnedSkills) {
+      progress.learnedSkills = [];
+    }
+    progress.learnedSkills = progress.learnedSkills.concat(moduleLearnedSkills);
+    await progress.save();
+    await userLearning.save();
   
     const fullBadges = await Badge.find(
       { _id: { $in: progress.badges } },
@@ -375,6 +387,7 @@ const completeModule = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 
 

@@ -4,7 +4,6 @@ const { authMiddleware } = require("../middleware/auth.middleware");
 const {
   addUserLearningByModule,
   getUserLearningProgress,
-  getAllLearningModules,
   updateUserLearningProgress,
   removeUserLearningModule,
   addUserLearningByUniqueModule
@@ -12,8 +11,8 @@ const {
 
 router.post("/addByModule", authMiddleware, addUserLearningByModule);
 router.post("/addByUniqueModule", authMiddleware, addUserLearningByUniqueModule);
-router.get("/getAll", authMiddleware, getUserLearningProgress);
-router.get("/getLearningModules", authMiddleware, getAllLearningModules);
+// router.get("/getAll", authMiddleware, getUserLearningProgres);
+router.get("/getLearningModules", authMiddleware, getUserLearningProgress);
 router.patch("/update-progress", authMiddleware, updateUserLearningProgress);
 router.delete("/module/:module_id", authMiddleware, removeUserLearningModule);
 

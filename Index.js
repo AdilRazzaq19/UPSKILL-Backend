@@ -25,6 +25,7 @@ const socialRoutes=require("./Routes/SocialRouter")
 const skillRoutes=require("./Routes/SkillRouter")
 const videoChatRoutes = require('./Routes/ChatRouter');
 const exerciseRoutes = require("./Routes/ApplyRouter");
+const learningPathRoutes=require("./Routes/LearningPathRouter");
 const logger=require("./middleware/logger")
 app.use(express.json());
 app.use(cookieParser());
@@ -52,6 +53,7 @@ app.use("/auth",socialRoutes);
 app.use("/skill",skillRoutes);
 app.use('/chat', videoChatRoutes);
 app.use("/apply", exerciseRoutes);
+app.use("/learningPath",learningPathRoutes)
 
 // Connect to MongoDB
 if (MODE === "development") {
