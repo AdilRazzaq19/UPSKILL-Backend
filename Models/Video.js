@@ -29,6 +29,10 @@ const VideoSchema = new Schema({
     type: String,
     required: true,
   },
+  channel_profile_image: {
+    type: String,
+    trim: true
+  },
   likes_count: {
     type: Number,
     default: 0,
