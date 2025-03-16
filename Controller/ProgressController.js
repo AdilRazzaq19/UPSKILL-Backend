@@ -7,6 +7,20 @@ const Badge = require("../Models/Badge");
 const UserProgress = require('../Models/userProgress'); 
 const UserLearning=require("../Models/Learning")
 const Video=require("../Models/Video")
+const Skill=require("../Models/Skill")
+
+// const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
+//   const allocatedBadgeIds = progress.badges.map(b => b.toString());
+//   const badge = await Badge.findOne({ name: badgeName });
+//   if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
+//     progress.badges.push(badge._id);
+//     if (targetPointsField && progress[targetPointsField] !== undefined) {
+//       progress[targetPointsField] += badge.points;
+//     }
+//     progress.points += badge.points;
+//   }
+// };
+
 const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
   const allocatedBadgeIds = progress.badges.map(b => b.toString());
   const badge = await Badge.findOne({ name: badgeName });
@@ -18,9 +32,11 @@ const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
     progress.points += badge.points;
   }
 };
+
 const updateStreaks = async (progress) => {
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
+
 
   // Ensure streak counters are initialized.
   progress.dailyStreak = progress.dailyStreak || 0;
@@ -32,33 +48,24 @@ const updateStreaks = async (progress) => {
   // If there's no record of a previous completion, initialize everything.
   if (!progress.lastCompletionDate) {
     progress.dailyStreak = 1;
-    progress.consecutiveModules = 1;
-    progress.lastCompletionDate = now;
   } else {
     const lastDateStr = new Date(progress.lastCompletionDate).toISOString().split("T")[0];
+    if (lastDateStr !== todayStr) {
+      // Check if the last completion was exactly yesterday.
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-    // If a module has already been completed today, don't update streaks further.
-    if (lastDateStr === todayStr) {
-      return;
+      if (lastDateStr === yesterdayStr) {
+        progress.dailyStreak += 1;
+      } else {
+        progress.dailyStreak = 1;
+      }
     }
-
-    // Compute yesterday's date string.
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-    if (lastDateStr === yesterdayStr) {
-      // Last module was completed yesterday, so we continue the streak.
-      progress.dailyStreak += 1;
-      progress.consecutiveModules += 1;
-    } else {
-      // Otherwise, the streak is broken and we start over.
-      progress.dailyStreak = 1;
-      progress.consecutiveModules = 1;
-    }
-    // Record today's completion.
-    progress.lastCompletionDate = now;
   }
+  progress.consecutiveModules += 1;
+  progress.lastCompletionDate = now;
+
 
   // Update the maximum daily streak if needed.
   if (progress.dailyStreak > progress.maxDailyStreak) {
@@ -85,29 +92,6 @@ const updateStreaks = async (progress) => {
   }
 };
 
-
-  const allocateModuleThresholdBadges = async (progress) => {
-  const allocatedBadgeIds = progress.badges.map(b => b.toString());
-  const moduleCount = progress.completed_modules.length;
-  const moduleThresholds = [
-    { count: 1, name: "Bronze" },
-    { count: 3, name: "Silver" },
-    { count: 5, name: "Gold" },
-    { count: 10, name: "Platinum" },
-  ];
-
-  for (const threshold of moduleThresholds) {
-    if (moduleCount >= threshold.count) {
-      const badge = await Badge.findOne({ name: threshold.name });
-      if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
-        progress.badges.push(badge._id);
-        progress.module_points += badge.points;
-        progress.points += badge.points;
-      }
-    }
-  }
-};
-
 const allocateMasterBadge = async (progress, quizScore) => {
   if (quizScore === 10) {
     await awardBadgeOnce(progress, "Master of Accuracy");
@@ -129,6 +113,59 @@ const allocateModuleMilestoneBadges = async (progress) => {
     await awardBadgeOnce(progress, "AI Legend");
   }
 };
+const awardSkillBadges = async (progress) => {
+  // Ensure skill_points exists; if not, initialize it to 0.
+  if (typeof progress.skill_points !== 'number') {
+    progress.skill_points = 0;
+  }
+
+  // If there are no learned skills, exit early.
+  if (!progress.learnedSkills || progress.learnedSkills.length === 0) {
+    console.log("No learned skills found in progress.");
+    return;
+  }
+
+  // Convert ObjectIds to strings and build a frequency map.
+  const learnedSkillIds = progress.learnedSkills.map(id => id.toString());
+  const skillCountMap = {};
+  learnedSkillIds.forEach(id => {
+    skillCountMap[id] = (skillCountMap[id] || 0) + 1;
+  });
+  console.log("Skill count map (by ObjectId):", skillCountMap);
+
+  // Get the unique ObjectIds.
+  const uniqueSkillIds = Object.keys(skillCountMap);
+  // Query the Skill collection to get full skill details.
+  const fullSkills = await Skill.find({ _id: { $in: uniqueSkillIds } });
+  console.log("Full skills from database:", fullSkills);
+
+  // Loop over each full skill object and award badges based on the count.
+  for (const skill of fullSkills) {
+    const count = skillCountMap[skill._id.toString()] || 0;
+    console.log(`Processing skill '${skill.skill_Name}' with count: ${count}`);
+
+    // Award badges based on thresholds.
+    if (count >= 1) {
+      console.log(`Awarding Bronze badge for '${skill.skill_Name}'`);
+      await awardBadgeOnce(progress, `${skill.skill_Name} Bronze`, 'skill_points');
+    }
+    if (count >= 3) {
+      console.log(`Awarding Silver badge for '${skill.skill_Name}'`);
+      await awardBadgeOnce(progress, `${skill.skill_Name} Silver`, 'skill_points');
+    }
+    if (count >= 5) {
+      console.log(`Awarding Gold badge for '${skill.skill_Name}'`);
+      await awardBadgeOnce(progress, `${skill.skill_Name} Gold`, 'skill_points');
+    }
+    if (count >= 10) {
+      console.log(`Awarding Platinum badge for '${skill.skill_Name}'`);
+      await awardBadgeOnce(progress, `${skill.skill_Name} Platinum`, 'skill_points');
+    }
+  }
+};
+
+
+
 const completeModule = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -188,14 +225,13 @@ const completeModule = async (req, res) => {
     }
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
-    // Update completion status in the userLearning record
+    // Update completion status in the userLearning record.
     userLearning.modules.forEach(mod => {
       if (mod.module_id.toString() === module_id) {
         mod.completed = true;
         mod.video_progress = 100;
       }
     });
-    // Mark the 'modules' array as modified
     userLearning.markModified('modules');
   
     userLearning.ai_recommendation.forEach(mod => {
@@ -204,11 +240,9 @@ const completeModule = async (req, res) => {
         mod.video_progress = 100;
       }
     });
-    // Mark the 'ai_recommendation' array as modified
     userLearning.markModified('ai_recommendation');
   
-    await updateStreaks(progress);
-    await allocateModuleThresholdBadges(progress);
+    await updateStreaks(progress);  
   
     const modulesInSection = await Module.find({ section_id: sectionId }, "_id");
     const completedInSectionCount = progress.completed_modules.filter(m =>
@@ -241,7 +275,7 @@ const completeModule = async (req, res) => {
       }
     }
   
-    // Award section badges if fully completed
+    // Award section badges if fully completed.
     if (sectionJustCompleted) {
       const sectionBadges = await Badge.find({ type: "Section Completion" });
       sectionBadges.forEach(sectionBadge => {
@@ -295,9 +329,14 @@ const completeModule = async (req, res) => {
   
     await allocateMasterBadge(progress, quizScore);
     await allocateModuleMilestoneBadges(progress);
-  
+    
+    // **** NEW ORDER: Award Skill Badges BEFORE calculating pointsEarned ****
+    await awardSkillBadges(progress);
+
+    // Now calculate the points earned in this module (including skill badge points).
     const pointsEarned = progress.points - pointsBefore;
   
+    // Update daily, weekly, and monthly points.
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
   
@@ -334,17 +373,27 @@ const completeModule = async (req, res) => {
       progress.monthly_points.push({ month: monthLabel, points: pointsEarned });
     }
   
-    const videosInModule = await Video.find({ module_id: module_id }, "learnedSkills");
+    // Fetch videos and populate learnedSkills with full skill objects.
+    const videosInModulePopulated = await Video.find({ module_id: module_id }).populate({
+      path: "learnedSkills",
+      select: "uniqueSkill_id skill_theme skill_Name skill_description"
+    });
+    console.log("Videos in module:", videosInModulePopulated);
+  
     let moduleLearnedSkills = [];
-    videosInModule.forEach(video => {
+    videosInModulePopulated.forEach(video => {
       if (video.learnedSkills && video.learnedSkills.length > 0) {
         moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
       }
     });
+    console.log("Module learned skills:", moduleLearnedSkills);
+  
     if (!progress.learnedSkills) {
       progress.learnedSkills = [];
     }
     progress.learnedSkills = progress.learnedSkills.concat(moduleLearnedSkills);
+    console.log("After updating learnedSkills:", progress.learnedSkills);
+  
     await progress.save();
     await userLearning.save();
   

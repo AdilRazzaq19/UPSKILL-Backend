@@ -66,7 +66,9 @@ const UserProgressSchema = new Schema(
     weeklyStreak: { type: Number, default: 0 },
     maxWeeklyStreak: { type: Number, default: 0 },
     consecutiveModules: { type: Number, default: 0 },
-    learnedSkills: [{ type: Schema.Types.ObjectId, ref: "Skill" }]
+    learnedSkills: [{ type: Schema.Types.ObjectId, ref: "Skill" }],
+    skill_points: { type: Number, default: 0 },
+
 
   },
   { timestamps: true }
