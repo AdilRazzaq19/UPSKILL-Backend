@@ -283,11 +283,19 @@ const getUserLearningProgress = async (req, res) => {
       .populate("section_id", "name")
       .populate({
         path: "modules.module_id",
-        select: "name"
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name" 
+        }
       })
       .populate({
         path: "ai_recommendation.module_id",
-        select: "name"
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name"
+        }
       });
 
     if (!userLearning.length) {
@@ -296,13 +304,9 @@ const getUserLearningProgress = async (req, res) => {
 
     let totalModuleCount = 0;
     let totalAiRecommendationCount = 0;
-
-    // Format the response to include theme, section, module details and counts per record
     const formattedProgress = userLearning.map(learning => {
       const moduleCount = learning.modules.length;
       const aiRecommendationCount = learning.ai_recommendation.length;
-
-      // Aggregate totals across all sections
       totalModuleCount += moduleCount;
       totalAiRecommendationCount += aiRecommendationCount;
 
@@ -317,12 +321,18 @@ const getUserLearningProgress = async (req, res) => {
         modules: learning.modules.map(mod => ({
           id: mod.module_id ? mod.module_id._id : null,
           name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
-          completed: mod.completed
+          completed: mod.completed,
+          video: mod.module_id && mod.module_id.video
+            ? {channelName: mod.module_id.video.channel_name }
+            : {}
         })),
         ai_recommendation: learning.ai_recommendation.map(mod => ({
           id: mod.module_id ? mod.module_id._id : null,
           name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
-          completed: mod.completed
+          completed: mod.completed,
+          video: mod.module_id && mod.module_id.video
+            ? {channelName: mod.module_id.video.channel_name }
+            : {}
         })),
         moduleCount,
         aiRecommendationCount

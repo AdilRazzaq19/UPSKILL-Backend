@@ -189,7 +189,6 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
       sectionName: moduleData.section_id ? moduleData.section_id.name : null,
       videoTitle: moduleData.video ? moduleData.video.title : null,
       moduleDescription:moduleData.description,
-
     };
 
     res.status(200).json({
