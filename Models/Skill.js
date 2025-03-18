@@ -2,11 +2,7 @@ const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const SkillSchema = new Schema({
-  uniqueSkill_id:{
-    type:String,
-    required:true,
-  },
-  skill_theme:{
+  skill_section:{
     type:String,
     required:true,
   },

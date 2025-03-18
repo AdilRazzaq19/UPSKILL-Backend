@@ -11,10 +11,6 @@ router.get("/getAll", skillController.getAllSkills);
 
 // Get a single skill by ID
 router.get("/getIndividual/:id", skillController.getSkillById);
-
-// Update a skill by ID
-router.put("/update/:id", skillController.updateSkill);
-
 // Delete a skill by ID
 router.delete("/delete/:id", skillController.deleteSkill);
 

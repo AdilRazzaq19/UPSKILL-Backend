@@ -5,11 +5,11 @@ const Video = require('../Models/Video');
 
 async function createSkill(req, res) {
   try {
-    const { skill_theme, uniqueSkill_id, skill_Name, skill_description } = req.body;
-    if (!skill_theme || !uniqueSkill_id || !skill_Name || !skill_description) {
+    const { skill_section, skill_Name, skill_description } = req.body;
+    if (!skill_section || !skill_Name || !skill_description) {
       return res.status(400).json({ msg: "Please provide all required fields" });
     }
-    const newSkill = new Skill({ skill_theme, uniqueSkill_id, skill_Name, skill_description });
+    const newSkill = new Skill({ skill_section, skill_Name, skill_description });
     const savedSkill = await newSkill.save();
     res.status(201).json(savedSkill);
   } catch (error) {
@@ -38,28 +38,6 @@ async function getSkillById(req, res) {
   }
 }
 
-async function updateSkill(req, res) {
-  try {
-    const { skill_theme, uniqueSkill_id, skill_Name, skill_description } = req.body;
-
-    if (!skill_theme || !uniqueSkill_id || !skill_Name || !skill_description) {
-      return res.status(400).json({ msg: "Please provide all required fields" });
-    }
-
-    const updatedSkill = await Skill.findByIdAndUpdate(
-      req.params.id,
-      { skill_theme, uniqueSkill_id, skill_Name, skill_description },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedSkill) {
-      return res.status(404).json({ msg: "Skill not found" });
-    }
-    res.status(200).json(updatedSkill);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
 async function deleteSkill(req, res) {
   try {
     const deletedSkill = await Skill.findByIdAndDelete(req.params.id);
@@ -181,7 +159,6 @@ module.exports = {
   createSkill,
   getAllSkills,
   getSkillById,
-  updateSkill,
   deleteSkill,
   storeSkills
 };
