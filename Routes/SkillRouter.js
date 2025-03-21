@@ -9,10 +9,12 @@ router.post("/create", skillController.createSkill);
 // Get all skills
 router.get("/getAll", skillController.getAllSkills);
 
-// Get a single skill by ID
+// Get a single skill by ID 
 router.get("/getIndividual/:id", skillController.getSkillById);
 // Delete a skill by ID
 router.delete("/delete/:id", skillController.deleteSkill);
 
 router.post("/create/:video_id",skillController.storeSkills)
+router.post("/update-video-skills", skillController.updateVideoSkills);
+
 module.exports = router;

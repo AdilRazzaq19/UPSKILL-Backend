@@ -155,10 +155,60 @@ const storeSkills = async (req, res) => {
 };
 
 
+  const updateVideoSkills = async (req, res) => {
+    try {
+      const { video_url, skills } = req.body;
+
+      // Validate the request payload
+      if (!video_url || !skills || !Array.isArray(skills)) {
+        return res.status(400).json({ message: "video_url and skills array are required." });
+      }
+
+      const skillIds = [];
+      const missingSkills = [];
+
+      // For each provided skill, find it by the skill_Name field
+      for (let skillName of skills) {
+        skillName = skillName.trim();
+        const skillDoc = await Skill.findOne({ skill_Name: skillName });
+        if (!skillDoc) {
+          missingSkills.push(skillName);
+        } else {
+          skillIds.push(skillDoc._id);
+        }
+      }
+
+      // If any skills are missing, return an error
+      if (missingSkills.length > 0) {
+        return res.status(404).json({ message: "Some skills were not found.", missingSkills });
+      }
+
+      // Overwrite the learnedSkills array in the Video document with the new skills
+      const updatedVideo = await Video.findOneAndUpdate(
+        { video_url },
+        { learnedSkills: skillIds },
+        { new: true }
+      );
+
+      if (!updatedVideo) {
+        return res.status(404).json({ message: "Video not found with the provided video_url." });
+      }
+
+      res.json({
+        message: "Learned skills updated successfully.",
+        video: updatedVideo,
+      });
+    } catch (error) {
+      console.error("Error updating learned skills:", error);
+      res.status(500).json({ error: "Server error updating learned skills." });
+    }
+  };
+
 module.exports = {
   createSkill,
   getAllSkills,
   getSkillById,
   deleteSkill,
-  storeSkills
+  storeSkills,
+  updateVideoSkills
 };
