@@ -374,13 +374,76 @@ const getUserLearningProgress = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+const getAllLearningModules = async (req, res) => {
+  try {
+    const user_id = req.user.id;
 
+    // Retrieve all learning progress for the user with the necessary population.
+    const userLearning = await UserLearning.find({ user_id })
+      .populate({
+        path: "modules.module_id",
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name"
+        }
+      })
+      .populate({
+        path: "ai_recommendation.module_id",
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name"
+        }
+      });
 
+    if (!userLearning.length) {
+      return res.status(404).json({ message: "No learning progress found for this user" });
+    }
 
+    // Create a flat list of modules.
+    let allModules = [];
 
+    userLearning.forEach(learning => {
+      // Process regular modules.
+      if (learning.modules && learning.modules.length) {
+        learning.modules.forEach(mod => {
+          const moduleObj = {
+            id: mod.module_id ? mod.module_id._id : null,
+            name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
+            completed: mod.completed,
+            video: mod.module_id && mod.module_id.video
+              ? { channelName: mod.module_id.video.channel_name }
+              : {}
+          };
+          allModules.push(moduleObj);
+        });
+      }
+      // Process AI recommendation modules.
+      if (learning.ai_recommendation && learning.ai_recommendation.length) {
+        learning.ai_recommendation.forEach(rec => {
+          const moduleObj = {
+            id: rec.module_id ? rec.module_id._id : null,
+            name: rec.module_id ? rec.module_id.name : rec.module_name || "Unknown Module",
+            completed: rec.completed,
+            video: rec.module_id && rec.module_id.video
+              ? { channelName: rec.module_id.video.channel_name }
+              : {}
+          };
+          allModules.push(moduleObj);
+        });
+      }
+    });
 
-
-
+    return res.status(200).json({ 
+      modules: allModules, 
+      count: allModules.length 
+    });
+  } catch (error) {
+    console.error("Error getting all learning modules:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
 
 const updateUserLearningProgress = async (req, res) => {
   try {
@@ -505,5 +568,6 @@ module.exports = {
   checkUserLearningModule,
   getUserLearningProgress,
   updateUserLearningProgress,
-  removeUserLearningModule
+  removeUserLearningModule,
+  getAllLearningModules
 };

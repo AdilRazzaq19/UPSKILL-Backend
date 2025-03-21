@@ -11,18 +11,7 @@ const Skill=require("../Models/Skill")
 const Onboarding = require("../Models/Onboarding");
 
 
-// const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
-//   const allocatedBadgeIds = progress.badges.map(b => b.toString());
-//   const badge = await Badge.findOne({ name: badgeName });
-//   if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
-//     progress.badges.push(badge._id);
-//     if (targetPointsField && progress[targetPointsField] !== undefined) {
-//       progress[targetPointsField] += badge.points;
-//     }
-//     progress.points += badge.points;
-//   }
-// };
-
+// Modified awardBadgeOnce to return points if a badge was awarded.
 const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
   const allocatedBadgeIds = progress.badges.map(b => b.toString());
   const badge = await Badge.findOne({ name: badgeName });
@@ -32,8 +21,73 @@ const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
       progress[targetPointsField] += badge.points;
     }
     progress.points += badge.points;
+    console.log(`Awarded badge "${badgeName}" for ${badge.points} points.`);
+    return badge.points;
+  }
+  return 0;
+};
+
+// Modified awardSkillBadges to update a breakdown for each skill.
+const awardSkillBadges = async (progress) => {
+  // Ensure skill_points and a breakdown mapping exist.
+  if (typeof progress.skill_points !== 'number') {
+    progress.skill_points = 0;
+  }
+  progress.skill_points_breakdown = progress.skill_points_breakdown || {};
+
+  if (!progress.learnedSkills || progress.learnedSkills.length === 0) {
+    console.log("No learned skills found in progress.");
+    return;
+  }
+
+  // Build a frequency map of learned skill IDs.
+  const learnedSkillIds = progress.learnedSkills.map(id => id.toString());
+  const skillCountMap = {};
+  learnedSkillIds.forEach(id => {
+    skillCountMap[id] = (skillCountMap[id] || 0) + 1;
+  });
+  console.log("Skill count map:", skillCountMap);
+
+  // Get full skill details for each unique learned skill.
+  const uniqueSkillIds = Object.keys(skillCountMap);
+  const fullSkills = await Skill.find({ _id: { $in: uniqueSkillIds } });
+  console.log("Full skills:", fullSkills);
+
+  // Loop over each skill and award skill badges based on thresholds.
+  for (const skill of fullSkills) {
+    const count = skillCountMap[skill._id.toString()] || 0;
+    // Initialize the breakdown for this skill if not already.
+    if (!progress.skill_points_breakdown[skill.skill_Name]) {
+      progress.skill_points_breakdown[skill.skill_Name] = 0;
+    }
+
+    // Bronze Badge (threshold >= 1)
+    if (count >= 1) {
+      const pointsAwarded = await awardBadgeOnce(progress, `${skill.skill_Name} Bronze`, 'skill_points');
+      progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
+      console.log(`Awarded ${skill.skill_Name} Bronze: +${pointsAwarded} points.`);
+    }
+    // Silver Badge (threshold >= 3)
+    if (count >= 3) {
+      const pointsAwarded = await awardBadgeOnce(progress, `${skill.skill_Name} Silver`, 'skill_points');
+      progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
+      console.log(`Awarded ${skill.skill_Name} Silver: +${pointsAwarded} points.`);
+    }
+    // Gold Badge (threshold >= 5)
+    if (count >= 5) {
+      const pointsAwarded = await awardBadgeOnce(progress, `${skill.skill_Name} Gold`, 'skill_points');
+      progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
+      console.log(`Awarded ${skill.skill_Name} Gold: +${pointsAwarded} points.`);
+    }
+    // Platinum Badge (threshold >= 10)
+    if (count >= 10) {
+      const pointsAwarded = await awardBadgeOnce(progress, `${skill.skill_Name} Platinum`, 'skill_points');
+      progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
+      console.log(`Awarded ${skill.skill_Name} Platinum: +${pointsAwarded} points.`);
+    }
   }
 };
+
 
 const updateStreaks = async (progress) => {
   const now = new Date();
@@ -115,57 +169,6 @@ const allocateModuleMilestoneBadges = async (progress) => {
     await awardBadgeOnce(progress, "AI Legend");
   }
 };
-const awardSkillBadges = async (progress) => {
-  // Ensure skill_points exists; if not, initialize it to 0.
-  if (typeof progress.skill_points !== 'number') {
-    progress.skill_points = 0;
-  }
-
-  // If there are no learned skills, exit early.
-  if (!progress.learnedSkills || progress.learnedSkills.length === 0) {
-    console.log("No learned skills found in progress.");
-    return;
-  }
-
-  // Convert ObjectIds to strings and build a frequency map.
-  const learnedSkillIds = progress.learnedSkills.map(id => id.toString());
-  const skillCountMap = {};
-  learnedSkillIds.forEach(id => {
-    skillCountMap[id] = (skillCountMap[id] || 0) + 1;
-  });
-  console.log("Skill count map (by ObjectId):", skillCountMap);
-
-  // Get the unique ObjectIds.
-  const uniqueSkillIds = Object.keys(skillCountMap);
-  // Query the Skill collection to get full skill details.
-  const fullSkills = await Skill.find({ _id: { $in: uniqueSkillIds } });
-  console.log("Full skills from database:", fullSkills);
-
-  // Loop over each full skill object and award badges based on the count.
-  for (const skill of fullSkills) {
-    const count = skillCountMap[skill._id.toString()] || 0;
-    console.log(`Processing skill '${skill.skill_Name}' with count: ${count}`);
-
-    // Award badges based on thresholds.
-    if (count >= 1) {
-      console.log(`Awarding Bronze badge for '${skill.skill_Name}'`);
-      await awardBadgeOnce(progress, `${skill.skill_Name} Bronze`, 'skill_points');
-    }
-    if (count >= 3) {
-      console.log(`Awarding Silver badge for '${skill.skill_Name}'`);
-      await awardBadgeOnce(progress, `${skill.skill_Name} Silver`, 'skill_points');
-    }
-    if (count >= 5) {
-      console.log(`Awarding Gold badge for '${skill.skill_Name}'`);
-      await awardBadgeOnce(progress, `${skill.skill_Name} Gold`, 'skill_points');
-    }
-    if (count >= 10) {
-      console.log(`Awarding Platinum badge for '${skill.skill_Name}'`);
-      await awardBadgeOnce(progress, `${skill.skill_Name} Platinum`, 'skill_points');
-    }
-  }
-};
-
 
 
 const completeModule = async (req, res) => {
@@ -217,6 +220,7 @@ const completeModule = async (req, res) => {
       return res.status(400).json({ message: "Module already completed" });
     }
   
+    // Award "Completing Module" badge.
     const moduleBadge = await Badge.findOne({ name: "Completing Module" });
     let modulePointsEarned = 0;
     if (moduleBadge) {
@@ -227,7 +231,7 @@ const completeModule = async (req, res) => {
     }
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
-    // Update completion status in the userLearning record.
+    // Update completion status in userLearning record.
     userLearning.modules.forEach(mod => {
       if (mod.module_id.toString() === module_id) {
         mod.completed = true;
@@ -236,7 +240,12 @@ const completeModule = async (req, res) => {
     });
     userLearning.markModified('modules');
   
-    userLearning.ai_recommendation.forEach(mod => {
+    // --- Fix for ai_recommendation validation --- 
+    // Iterate over each ai_recommendation subdocument. If order is missing, assign a default value.
+    userLearning.ai_recommendation.forEach((mod, index) => {
+      if (!mod.order) {
+        mod.order = index + 1;
+      }
       if (mod.module_id.toString() === module_id) {
         mod.completed = true;
         mod.video_progress = 100;
@@ -244,8 +253,9 @@ const completeModule = async (req, res) => {
     });
     userLearning.markModified('ai_recommendation');
   
-    await updateStreaks(progress);  
+    await updateStreaks(progress);
   
+    // Calculate section progress.
     const modulesInSection = await Module.find({ section_id: sectionId }, "_id");
     const completedInSectionCount = progress.completed_modules.filter(m =>
       modulesInSection.some(mod => mod._id.toString() === m.module_id.toString())
@@ -277,7 +287,7 @@ const completeModule = async (req, res) => {
       }
     }
   
-    // Award section badges if fully completed.
+    // Award section completion badges if section is fully completed.
     if (sectionJustCompleted) {
       const sectionBadges = await Badge.find({ type: "Section Completion" });
       sectionBadges.forEach(sectionBadge => {
@@ -287,6 +297,7 @@ const completeModule = async (req, res) => {
       });
     }
   
+    // Calculate theme progress.
     let themeJustCompleted = false;
     if (themeId) {
       const sectionsInTheme = await Section.find({ theme_id: themeId }, "_id");
@@ -329,13 +340,39 @@ const completeModule = async (req, res) => {
       }
     }
   
+    // Award master and module milestone badges.
     await allocateMasterBadge(progress, quizScore);
     await allocateModuleMilestoneBadges(progress);
-    
-    // **** NEW ORDER: Award Skill Badges BEFORE calculating pointsEarned ****
+  
+    // --- Update learnedSkills BEFORE awarding skill badges ---
+    const videosInModulePopulated = await Video.find({ module_id: module_id }).populate({
+      path: "learnedSkills",
+      select: "uniqueSkill_id skill_theme skill_Name skill_description"
+    });
+    console.log("Videos in module:", videosInModulePopulated);
+  
+    let moduleLearnedSkills = [];
+    videosInModulePopulated.forEach(video => {
+      if (video.learnedSkills && video.learnedSkills.length > 0) {
+        moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
+      }
+    });
+    console.log("Module learned skills:", moduleLearnedSkills);
+  
+    // Concatenate new learned skills (as ObjectIds) to progress.learnedSkills.
+    if (!progress.learnedSkills) {
+      progress.learnedSkills = [];
+    }
+    moduleLearnedSkills.forEach(skill => {
+      const skillId = skill._id ? skill._id : skill;
+      progress.learnedSkills.push(skillId);
+    });
+    console.log("After updating learnedSkills:", progress.learnedSkills);
+  
+    // Now award skill badges after learnedSkills has been updated.
     await awardSkillBadges(progress);
-
-    // Now calculate the points earned in this module (including skill badge points).
+  
+    // Calculate points earned in this module (including all badge points).
     const pointsEarned = progress.points - pointsBefore;
   
     // Update daily, weekly, and monthly points.
@@ -375,34 +412,45 @@ const completeModule = async (req, res) => {
       progress.monthly_points.push({ month: monthLabel, points: pointsEarned });
     }
   
-    // Fetch videos and populate learnedSkills with full skill objects.
-    const videosInModulePopulated = await Video.find({ module_id: module_id }).populate({
-      path: "learnedSkills",
-      select: "uniqueSkill_id skill_theme skill_Name skill_description"
-    });
-    console.log("Videos in module:", videosInModulePopulated);
-  
-    let moduleLearnedSkills = [];
-    videosInModulePopulated.forEach(video => {
-      if (video.learnedSkills && video.learnedSkills.length > 0) {
-        moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
-      }
-    });
-    console.log("Module learned skills:", moduleLearnedSkills);
-  
-    if (!progress.learnedSkills) {
-      progress.learnedSkills = [];
-    }
-    progress.learnedSkills = progress.learnedSkills.concat(moduleLearnedSkills);
-    console.log("After updating learnedSkills:", progress.learnedSkills);
-  
+    // Save the updated progress and learning records.
     await progress.save();
     await userLearning.save();
   
+    // Retrieve full badge objects.
     const fullBadges = await Badge.find(
       { _id: { $in: progress.badges } },
       "name description type tagline points criteria hidden"
     );
+    // Calculate total badge points.
+    const totalBadgePoints = fullBadges.reduce((acc, badge) => acc + badge.points, 0);
+  
+    // --- Recalculate skill points breakdown from awarded badges ---
+    // Deduplicate learned skill IDs.
+    const uniqueLearnedSkillIds = [...new Set(progress.learnedSkills.map(id => id.toString()))];
+    const fullLearnedSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
+    const newSkillBreakdown = {};
+    fullLearnedSkills.forEach(skill => {
+      newSkillBreakdown[skill.skill_Name] = 0;
+    });
+    // Loop through all awarded badges and add points.
+    // Remove trailing tier words (Bronze, Silver, Gold, Platinum) from badge name before matching.
+    fullBadges.forEach(badge => {
+      const baseName = badge.name.replace(/ (Bronze|Silver|Gold|Platinum)$/i, '');
+      Object.keys(newSkillBreakdown).forEach(skillName => {
+        if (baseName.toLowerCase() === skillName.toLowerCase()) {
+          newSkillBreakdown[skillName] += badge.points;
+        }
+      });
+    });
+    progress.skill_points_breakdown = newSkillBreakdown;
+    // Recalculate total skill points as the sum of breakdown values.
+    const recalculatedTotalSkillPoints = Object.values(newSkillBreakdown).reduce((acc, val) => acc + val, 0);
+    progress.skill_points = recalculatedTotalSkillPoints;
+  
+    // Save the updated breakdown to the database.
+    await progress.save();
+  
+    // Count completed modules, sections, and themes.
     const countCompletedModules = progress.completed_modules.length;
     const countCompletedSections = progress.section_progress.filter(sp => sp.status === "completed").length;
     const countCompletedThemes = progress.theme_progress.filter(tp => tp.status === "completed").length;
@@ -423,14 +471,16 @@ const completeModule = async (req, res) => {
         daily_points: progress.daily_points,
         weekly_points: progress.weekly_points,
         monthly_points: progress.monthly_points,
-        total_badge_points: progress.total_badge_points,
         badges: fullBadges,
+        total_badge_points: totalBadgePoints,
         dailyStreak: progress.dailyStreak,
         maxDailyStreak: progress.maxDailyStreak,
         weeklyStreak: progress.weeklyStreak,
         maxWeeklyStreak: progress.maxWeeklyStreak,
         consecutiveModules: progress.consecutiveModules,
-        learnedSkills: progress.learnedSkills  
+        learnedSkills: progress.learnedSkills,
+        skill_points_breakdown: progress.skill_points_breakdown,
+        total_skill_points: progress.skill_points
       },
     });
   } catch (error) {
@@ -442,9 +492,65 @@ const completeModule = async (req, res) => {
 
 
 
+const getSkillChartData = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user id provided." });
+    }
+    // Find the user progress and select only the fields needed for the chart
+    const progress = await UserProgress.findOne({ user_id: userId }).select("skill_points_breakdown skill_points");
+    if (!progress) {
+      return res.status(404).json({ message: "User progress not found." });
+    }
+    // Return the skill breakdown data for charting
+    return res.status(200).json({
+      skill_points_breakdown: progress.skill_points_breakdown,
+      total_skill_points: progress.skill_points
+    });
+  } catch (error) {
+    console.error("Error fetching skill chart data:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
 
 
 
+
+
+
+  
+  // const getUserProgress = async (req, res) => {
+  //   try {
+  //     const userId = req.user._id;
+  
+  //     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+  //       return res.status(400).json({ message: "Invalid user id provided." });
+  //     }
+  
+  //     const progress = await UserProgress.findOne({ user_id: userId })
+  //       .populate({
+  //         path: "badges",
+  //         select: "name type description tagline points criteria hidden",
+  //       }).populate({
+  //         path:"learnedSkills"
+  //       });
+  
+  //     if (!progress) {
+  //       return res.status(404).json({ message: "User progress not found." });
+  //     }
+  
+  
+  //     res.status(200).json({
+  //       progress: {
+  //         ...progress.toObject(),
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error("Error fetching user progress:", error);
+  //     res.status(500).json({ message: error.message });
+  //   }
+  // };
   
   const getUserProgress = async (req, res) => {
     try {
@@ -458,26 +564,24 @@ const completeModule = async (req, res) => {
         .populate({
           path: "badges",
           select: "name type description tagline points criteria hidden",
-        }).populate({
-          path:"learnedSkills"
+        })
+        .populate({
+          path: "learnedSkills"
         });
   
       if (!progress) {
         return res.status(404).json({ message: "User progress not found." });
       }
   
-  
+      // Return the progress object exactly as stored, including skill_points_breakdown and total_skill_points.
       res.status(200).json({
-        progress: {
-          ...progress.toObject(),
-        },
+        progress: progress.toObject()
       });
     } catch (error) {
       console.error("Error fetching user progress:", error);
       res.status(500).json({ message: error.message });
     }
   };
-  
   
   
 
@@ -918,5 +1022,6 @@ module.exports = {
   getUserDailyPointsHeat,
   userRanking,
   userIndividualRanking,
-  userCompleteRanking
+  userCompleteRanking,
+  getSkillChartData
 };

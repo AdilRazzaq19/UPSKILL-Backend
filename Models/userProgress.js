@@ -68,6 +68,10 @@ const UserProgressSchema = new Schema(
     consecutiveModules: { type: Number, default: 0 },
     learnedSkills: [{ type: Schema.Types.ObjectId, ref: "Skill" }],
     skill_points: { type: Number, default: 0 },
+    skill_points_breakdown: {
+      type: Object,
+      default: {}
+    },
 
 
   },
