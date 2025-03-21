@@ -37,7 +37,7 @@ const videoChatController = async (req, res) => {
 
   try {
     const response = await axios.post(
-      `http://35.180.225.153/v2/video-chat/?video_id=${video_id}`,
+      `http://15.237.7.12/v2/video-chat/?video_id=${video_id}`,
       req.body,
       {
         headers: {
@@ -74,7 +74,7 @@ const videoChatController = async (req, res) => {
 const generalChatController = async (req, res) => {
   try {
     const response = await axios.post(
-      `http://35.180.225.153/v2/general-chat/`,
+      `http://15.237.7.12/v2/general-chat/`,
       req.body,
       {
         headers: {
@@ -114,7 +114,7 @@ const getChatHistory = async (req, res) => {
       return res.status(400).json({ error: "session_id is required" });
     }
     
-    const response = await axios.get("http://35.180.225.153/v2/chat-history/", {
+    const response = await axios.get("http://15.237.7.12/v2/v2/chat-history/", {
       params: { session_id },
       headers: { Accept: "application/json" }
     });

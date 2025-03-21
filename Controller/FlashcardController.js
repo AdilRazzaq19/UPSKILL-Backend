@@ -7,7 +7,7 @@ const storeFlashcards = async (req, res) => {
 
   try {
     // Fetch flashcard data from the external API
-    const response = await axios.get("http://35.180.225.153/v2/notes/", {
+    const response = await axios.get("http://15.237.7.12/v2/notes/", {
       params: { video_id }
     });
 

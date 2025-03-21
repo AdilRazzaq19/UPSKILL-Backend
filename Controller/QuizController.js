@@ -7,7 +7,7 @@ const storeQuiz = async (req, res) => {
   
   try {
     // Fetch MCQs from external API
-    const response = await axios.get("http://35.180.225.153/v2/mcqs/", {
+    const response = await axios.get("http://15.237.7.12/v2/mcqs/", {
       params: { video_id }
     });
     

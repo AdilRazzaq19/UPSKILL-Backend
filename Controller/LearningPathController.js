@@ -227,7 +227,7 @@ exports.generateLearningPath = async (req, res) => {
     const payload = req.body;
     console.log("Generating learning path with payload:", payload);
 
-    const aiApiUrl = "http://35.180.225.153/v2/generate_learning_path";
+    const aiApiUrl = "http://15.237.7.12/v2/generate_learning_path";
     const response = await axios.post(aiApiUrl, payload, {
       headers: {
         "Content-Type": "application/json",

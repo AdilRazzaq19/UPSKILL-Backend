@@ -68,7 +68,7 @@ exports.generateExercise = async (req, res) => {
   try {
     const payload = req.body;
     const response = await axios.post(
-      "http://35.180.225.153/v2/generate_exercise",
+      "http://15.237.7.12/v2/generate_exercise",
       payload,
       {
         headers: {
