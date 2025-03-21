@@ -299,25 +299,26 @@ const getUserLearningProgress = async (req, res) => {
       });
 
     if (!userLearning.length) {
-      return res.status(404).json({ message: "No learning progress found for this user" });
+      return res
+        .status(404)
+        .json({ message: "No learning progress found for this user" });
     }
 
     let totalModuleCount = 0;
     let totalAiRecommendationCount = 0;
 
-    // These objects will group modules by section id.
+    // Group sections so that modules are nested directly inside each section object.
     const aiRecommendationsBySection = {};
     const userPreferenceBySection = {};
 
-    // Loop through each learning record
     userLearning.forEach(learning => {
-      // Use the section info from the learning record
+      // Extract section details from the learning record.
       const section = learning.section_id
         ? { id: learning.section_id._id, name: learning.section_id.name }
         : { id: "unknown", name: "Unknown Section" };
       const sectionId = section.id.toString();
 
-      // Process AI recommendations first
+      // Process AI recommendations.
       learning.ai_recommendation.forEach(rec => {
         const moduleObj = {
           id: rec.module_id ? rec.module_id._id : null,
@@ -325,17 +326,20 @@ const getUserLearningProgress = async (req, res) => {
           completed: rec.completed,
           video: rec.module_id && rec.module_id.video
             ? { channelName: rec.module_id.video.channel_name }
-            : {}
+            : {},
+          aiModuleTitle: rec.ai_module_title || null,
+          relevanceStatement: rec.relevance_statement || null
         };
 
         if (!aiRecommendationsBySection[sectionId]) {
-          aiRecommendationsBySection[sectionId] = { section, modules: [] };
+          // Create the section object and directly nest modules inside it.
+          aiRecommendationsBySection[sectionId] = { ...section, modules: [] };
         }
         aiRecommendationsBySection[sectionId].modules.push(moduleObj);
         totalAiRecommendationCount++;
       });
 
-      // Process user preference modules (non-AI recommendations)
+      // Process user preference modules.
       learning.modules.forEach(mod => {
         const moduleObj = {
           id: mod.module_id ? mod.module_id._id : null,
@@ -343,18 +347,20 @@ const getUserLearningProgress = async (req, res) => {
           completed: mod.completed,
           video: mod.module_id && mod.module_id.video
             ? { channelName: mod.module_id.video.channel_name }
-            : {}
+            : {},
+          aiModuleTitle: mod.ai_module_title || null,
+          relevanceStatement: mod.relevance_statement || null
         };
 
         if (!userPreferenceBySection[sectionId]) {
-          userPreferenceBySection[sectionId] = { section, modules: [] };
+          // Create the section object and nest modules inside it.
+          userPreferenceBySection[sectionId] = { ...section, modules: [] };
         }
         userPreferenceBySection[sectionId].modules.push(moduleObj);
         totalModuleCount++;
       });
     });
 
-    // Prepare the final response object
     const formattedProgress = {
       totalAiRecommendationCount,
       totalModuleCount,
@@ -368,6 +374,8 @@ const getUserLearningProgress = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
+
 
 
 

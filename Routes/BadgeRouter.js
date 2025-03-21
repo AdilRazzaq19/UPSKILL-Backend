@@ -8,5 +8,7 @@ router.get("/getIndividual/:id", badgeController.getBadgeById);
 router.put("/update/:id", badgeController.updateBadge);
 router.get("/badgeByType",badgeController.getBadgesByType)
 router.delete("/delete/:id", badgeController.deleteBadge);
+router.delete("/deleteSkillMaster", badgeController.deleteSkillMasterBadges);
+
 
 module.exports = router;

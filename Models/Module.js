@@ -18,7 +18,6 @@ const ModuleSchema = new Schema({
     type: String, 
     required: true 
   },
-  // When a module is first created, video is not assigned (defaults to null).
   video: {
     type: Schema.Types.ObjectId,
     ref: "Video",

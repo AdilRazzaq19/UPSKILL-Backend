@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const ModuleLearningSchema = new Schema({
+  order: { type: Number, required: true },
   module_id: {
     type: Schema.Types.ObjectId,
     ref: "Module",
@@ -11,8 +12,17 @@ const ModuleLearningSchema = new Schema({
     type: String,
     required: true,
   },
-    module_name: {
+  module_name: {
     type: String,
+    required: true,
+  },
+  ai_module_title: {
+    type: String,
+    required: false,
+  },
+  relevance_statement: {
+    type: String,
+    required: false,
   },
   completed: {
     type: Boolean,
@@ -37,9 +47,7 @@ const UserLearningSchema = new Schema(
       ref: "Section",
       required: true,
     },
-    // Array for user-preferred learning modules.
     modules: [ModuleLearningSchema],
-    // Array for AI-recommended modules.
     ai_recommendation: [ModuleLearningSchema],
   },
   { timestamps: true }

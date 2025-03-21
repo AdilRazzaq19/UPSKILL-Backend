@@ -1,6 +1,5 @@
 const Badge = require("../Models/Badge");
 
-// Create a new badge
 const createBadge = async (req, res) => {
   try {
     const { name, type, description, tagline, points, criteria, hidden } = req.body;
@@ -12,7 +11,6 @@ const createBadge = async (req, res) => {
       });
     }
 
-    // Check if a badge with the same name already exists.
     const existingBadge = await Badge.findOne({ name });
     if (existingBadge) {
       return res.status(400).json({ message: "A badge with this name already exists." });
@@ -100,6 +98,25 @@ const deleteBadge = async (req, res) => {
   }
 };
 
+const deleteSkillMasterBadges = async (req, res) => {
+  try {
+    const result = await Badge.deleteMany({
+      type: { $regex: new RegExp("^skill master$", "i") }
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "No badges of type 'skill master' found." });
+    }
+
+    res.status(200).json({
+      message: `${result.deletedCount} badge(s) of type 'skill master' deleted successfully.`
+    });
+  } catch (error) {
+    console.error("Error deleting badges:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
 const getBadgesByType = async (req, res) => {
   try {
     const { type } = req.query;
@@ -134,5 +151,6 @@ module.exports = {
   getBadgeById,
   updateBadge,
   deleteBadge,
-  getBadgesByType
+  getBadgesByType,
+  deleteSkillMasterBadges
 };
