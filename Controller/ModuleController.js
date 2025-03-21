@@ -201,6 +201,37 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
   }
 };
 
+const updateModuleName = async (req, res) => {
+  try {
+    // Get module id from URL parameters
+    const moduleId = req.params.id;
+    // Get new module name from request body
+    const { name } = req.body;
+
+    // Validate moduleId and name
+    if (!mongoose.Types.ObjectId.isValid(moduleId)) {
+      return res.status(400).json({ message: "Invalid module id provided." });
+    }
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ message: "A valid module name is required." });
+    }
+
+    // Find the module document by ID
+    const moduleDoc = await Module.findById(moduleId);
+    if (!moduleDoc) {
+      return res.status(404).json({ message: "Module not found." });
+    }
+
+    // Update the module's name
+    moduleDoc.name = name.trim();
+    await moduleDoc.save();
+
+    res.status(200).json({ message: "Module name updated successfully.", module: moduleDoc });
+  } catch (error) {
+    console.error("Error updating module name:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
 
 
 module.exports = { 
@@ -210,5 +241,6 @@ module.exports = {
   updateModule, 
   deleteModule, 
   getModulesBySectionId,
-  getModuleDetailsByUniqueModuleId
+  getModuleDetailsByUniqueModuleId,
+  updateModuleName
 };

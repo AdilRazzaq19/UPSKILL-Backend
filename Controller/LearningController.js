@@ -10,12 +10,12 @@ const addUserLearningByModule = async (req, res) => {
     const user_id = req.user.id;
     const { module_id } = req.body;
 
-    // Validate that a module ID is provided and that it's a valid ObjectId
+    // Validate module_id
     if (!module_id || !mongoose.Types.ObjectId.isValid(module_id)) {
       return res.status(400).json({ message: "Invalid module ID provided." });
     }
 
-    // Find the module by its _id (not by a "module_id" field) and populate its section and theme
+    // Find the module and populate its section and theme
     const moduleDoc = await Module.findById(module_id).populate({
       path: "section_id",
       populate: { path: "theme_id" }
@@ -38,26 +38,27 @@ const addUserLearningByModule = async (req, res) => {
     const theme_id = moduleDoc.section_id.theme_id._id;
     const theme_name = moduleDoc.section_id.theme_id.name;
 
-    // Log the details
-      console.log("Section ID:", section_id);
-      console.log("Section Name:", section_name);
-      console.log("Module Name:", modName);
-      console.log("Unique Module ID:", uniqueModuleID);
-      console.log("Theme ID:", theme_id);
-      console.log("Theme Name:", theme_name);
+    console.log("Section ID:", section_id);
+    console.log("Section Name:", section_name);
+    console.log("Module Name:", modName);
+    console.log("Unique Module ID:", uniqueModuleID);
+    console.log("Theme ID:", theme_id);
+    console.log("Theme Name:", theme_name);
 
-      let existingLearning = await UserLearning.findOne({
-        user_id,
-        section_id,
-        $or: [
-          { "modules.module_id": moduleDoc._id },
-          { "ai_recommendation.module_id": moduleDoc._id }
-        ]
-      });
+    // Check if the module is already in the learning list
+    let existingLearning = await UserLearning.findOne({
+      user_id,
+      section_id,
+      $or: [
+        { "modules.module_id": moduleDoc._id },
+        { "ai_recommendation.module_id": moduleDoc._id }
+      ]
+    });
     if (existingLearning) {
       return res.status(400).json({ message: "This module is already in your learning list." });
     }
 
+    // Find or create the UserLearning document for this section.
     let userLearning = await UserLearning.findOne({ user_id, section_id });
     if (!userLearning) {
       userLearning = new UserLearning({
@@ -67,15 +68,34 @@ const addUserLearningByModule = async (req, res) => {
         modules: [],
         ai_recommendation: []
       });
+    } else {
+      // Ensure each existing module has an order
+      userLearning.modules = userLearning.modules.map((module, index) => {
+        if (!module.order) {
+          module.order = index + 1;
+        }
+        return module;
+      });
+      // Ensure each existing ai_recommendation has an order
+      userLearning.ai_recommendation = userLearning.ai_recommendation.map((rec, index) => {
+        if (!rec.order) {
+          rec.order = index + 1;
+        }
+        return rec;
+      });
     }
 
-    // Add the module to the user-preferred modules array (including unique_ModuleID for schema compliance)
+    // Determine the order for the new module
+    const newModuleOrder = userLearning.modules.length + 1;
+
+    // Add the new module with an order field
     userLearning.modules.push({
       module_id: moduleDoc._id,
       unique_ModuleID: uniqueModuleID,
       module_name: modName,
       completed: false,
-      // videos: formattedVideos, // If you want to include videos, otherwise remove this line.
+      order: newModuleOrder,
+      // videos: formattedVideos, // Include if needed.
     });
 
     await userLearning.save();
@@ -114,6 +134,7 @@ const addUserLearningByModule = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 const addUserLearningByUniqueModule = async (req, res) => {
   try {
     const user_id = req.user.id;
@@ -143,12 +164,34 @@ const addUserLearningByUniqueModule = async (req, res) => {
     const uniqueModuleID = moduleDoc.unique_ModuleID;
     const theme_id = moduleDoc.section_id.theme_id._id;
     const theme_name = moduleDoc.section_id.theme_id.name;
+    
     let userLearning = await UserLearning.findOne({ user_id, section_id });
+    
     if (userLearning) {
       console.log("Found existing UserLearning record:", userLearning._id.toString());
       console.log("moduleDoc.unique_ModuleID:", uniqueModuleID);
+      
+      // Ensure each existing module has an order field
+      userLearning.modules = userLearning.modules.map((mod, index) => {
+        if (!mod.order) {
+          mod.order = index + 1;
+        }
+        return mod;
+      });
+      
+      // Ensure each recommendation in ai_recommendation has an order field
+      userLearning.ai_recommendation = userLearning.ai_recommendation.map((mod, index) => {
+        if (!mod.order) {
+          mod.order = index + 1;
+        }
+        return mod;
+      });
+      
+      // Optional: Filter modules to only those with a unique_ModuleID
       userLearning.modules = userLearning.modules.filter(mod => mod.unique_ModuleID);
+      
       await userLearning.populate("ai_recommendation.module_id");
+      
       let existsInModules = false;
       for (const mod of userLearning.modules) {
         console.log("modules - stored unique_ModuleID:", mod.unique_ModuleID);
@@ -166,7 +209,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
         }
       }
       console.log("existsInModules:", existsInModules, "existsInAIRec:", existsInAIRec);
-
+      
       if (existsInModules) {
         return res.status(400).json({ message: "This module is already in your user learning preferences." });
       }
@@ -183,14 +226,22 @@ const addUserLearningByUniqueModule = async (req, res) => {
         ai_recommendation: []
       });
     }
+    
+    // Determine the order for the new module based on existing modules
+    const newModuleOrder = userLearning.modules.length + 1;
+    
+    // Add the new module along with the order property
     userLearning.modules.push({
       module_id: moduleDoc._id,
       unique_ModuleID: uniqueModuleID,
       module_name: modName,
       completed: false,
+      order: newModuleOrder
     });
+    
     await userLearning.save();
     console.log("Module added to UserLearning for section:", section_name);
+    
     let userProgress = await UserProgress.findOne({ user_id });
     if (!userProgress) {
       userProgress = new UserProgress({
@@ -209,7 +260,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
       });
     }
     await userProgress.save();
-
+    
     res.status(201).json({
       message: "Module added successfully",
       data: {
@@ -223,6 +274,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 
 const checkUserLearningModule = async (req, res) => {
