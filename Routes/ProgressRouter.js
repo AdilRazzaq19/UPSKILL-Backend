@@ -11,6 +11,6 @@ router.get("/getAll",authMiddleware,ProgressController.getUserProgress);
 router.get("/weekly-points", authMiddleware, ProgressController.getUserWeeklyTotalPoints);
 router.get("/heatmap", authMiddleware, ProgressController.getUserDailyPointsHeat);
 router.get("/ranking",authMiddleware,ProgressController.userRanking);
-router.get("/individualRanking",authMiddleware,ProgressController.userIndividualRanking);
+router.get("/individualRanking",authMiddleware,ProgressController.userCompleteRanking);
 
 module.exports = router;

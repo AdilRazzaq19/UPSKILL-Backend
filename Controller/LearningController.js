@@ -286,7 +286,7 @@ const getUserLearningProgress = async (req, res) => {
         select: "name video",
         populate: {
           path: "video",
-          select: "channel_name" 
+          select: "channel_name"
         }
       })
       .populate({
@@ -304,51 +304,71 @@ const getUserLearningProgress = async (req, res) => {
 
     let totalModuleCount = 0;
     let totalAiRecommendationCount = 0;
-    const formattedProgress = userLearning.map(learning => {
-      const moduleCount = learning.modules.length;
-      const aiRecommendationCount = learning.ai_recommendation.length;
-      totalModuleCount += moduleCount;
-      totalAiRecommendationCount += aiRecommendationCount;
 
-      return {
-        _id: learning._id,
-        theme: learning.theme_id
-          ? { id: learning.theme_id._id, name: learning.theme_id.name }
-          : { id: null, name: "Unknown Theme" },
-        section: learning.section_id
-          ? { id: learning.section_id._id, name: learning.section_id.name }
-          : { id: null, name: "Unknown Section" },
-        modules: learning.modules.map(mod => ({
+    // These objects will group modules by section id.
+    const aiRecommendationsBySection = {};
+    const userPreferenceBySection = {};
+
+    // Loop through each learning record
+    userLearning.forEach(learning => {
+      // Use the section info from the learning record
+      const section = learning.section_id
+        ? { id: learning.section_id._id, name: learning.section_id.name }
+        : { id: "unknown", name: "Unknown Section" };
+      const sectionId = section.id.toString();
+
+      // Process AI recommendations first
+      learning.ai_recommendation.forEach(rec => {
+        const moduleObj = {
+          id: rec.module_id ? rec.module_id._id : null,
+          name: rec.module_id ? rec.module_id.name : rec.module_name || "Unknown Module",
+          completed: rec.completed,
+          video: rec.module_id && rec.module_id.video
+            ? { channelName: rec.module_id.video.channel_name }
+            : {}
+        };
+
+        if (!aiRecommendationsBySection[sectionId]) {
+          aiRecommendationsBySection[sectionId] = { section, modules: [] };
+        }
+        aiRecommendationsBySection[sectionId].modules.push(moduleObj);
+        totalAiRecommendationCount++;
+      });
+
+      // Process user preference modules (non-AI recommendations)
+      learning.modules.forEach(mod => {
+        const moduleObj = {
           id: mod.module_id ? mod.module_id._id : null,
           name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
           completed: mod.completed,
           video: mod.module_id && mod.module_id.video
-            ? {channelName: mod.module_id.video.channel_name }
+            ? { channelName: mod.module_id.video.channel_name }
             : {}
-        })),
-        ai_recommendation: learning.ai_recommendation.map(mod => ({
-          id: mod.module_id ? mod.module_id._id : null,
-          name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
-          completed: mod.completed,
-          video: mod.module_id && mod.module_id.video
-            ? {channelName: mod.module_id.video.channel_name }
-            : {}
-        })),
-        moduleCount,
-        aiRecommendationCount
-      };
+        };
+
+        if (!userPreferenceBySection[sectionId]) {
+          userPreferenceBySection[sectionId] = { section, modules: [] };
+        }
+        userPreferenceBySection[sectionId].modules.push(moduleObj);
+        totalModuleCount++;
+      });
     });
 
-    return res.status(200).json({
-      totalModuleCount,
+    // Prepare the final response object
+    const formattedProgress = {
       totalAiRecommendationCount,
-      learningProgress: formattedProgress
-    });
+      totalModuleCount,
+      aiRecommendations: Object.values(aiRecommendationsBySection),
+      userPreferenceModules: Object.values(userPreferenceBySection)
+    };
+
+    return res.status(200).json(formattedProgress);
   } catch (error) {
     console.error("Error getting learning progress:", error);
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 
 

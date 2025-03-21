@@ -8,6 +8,8 @@ const UserProgress = require('../Models/userProgress');
 const UserLearning=require("../Models/Learning")
 const Video=require("../Models/Video")
 const Skill=require("../Models/Skill")
+const Onboarding = require("../Models/Onboarding");
+
 
 // const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
 //   const allocatedBadgeIds = progress.badges.map(b => b.toString());
@@ -720,6 +722,190 @@ const userIndividualRanking = async (req, res) => {
   }
 };
 
+const userCompleteRanking = async (req, res) => {
+  try {
+    const user_id = req.user._id;
+
+    const progressList = await UserProgress.find({})
+      .populate("user_id", "username")
+      .sort({ points: -1 });
+
+    if (!progressList.length) {
+      return res.status(404).json({ message: "No progress data found." });
+    }
+
+    // Get all user IDs from the progress list
+    const userIds = progressList.map(item => item.user_id._id);
+
+    // Fetch the onboarding records for these users
+    const onboardingRecords = await Onboarding.find({ user_id: { $in: userIds } });
+    // Create a map: user_id (string) -> onboarding record
+    const onboardingMap = {};
+    onboardingRecords.forEach(record => {
+      onboardingMap[record.user_id.toString()] = record;
+    });
+
+    // ---------------- Overall Ranking ----------------
+    const totalUsers = progressList.length;
+    let overallRankedList = [];
+    let lastPoints = null, lastOrdinalRank = 0, lastPercentile = 0;
+
+    for (let i = 0; i < totalUsers; i++) {
+      const current = progressList[i];
+      let ordinalRank, percentile;
+      if (i === 0) {
+        ordinalRank = 1;
+        percentile = Math.ceil(((i + 1) / totalUsers) * 100);
+      } else {
+        if (current.points === lastPoints) {
+          ordinalRank = lastOrdinalRank;
+          percentile = lastPercentile;
+        } else {
+          ordinalRank = i + 1;
+          percentile = Math.ceil(((i + 1) / totalUsers) * 100);
+        }
+      }
+      overallRankedList.push({
+        user_id: current.user_id._id,
+        username: current.user_id.username,
+        points: current.points,
+        rank: ordinalRank,
+        percentileRank: percentile
+      });
+      lastPoints = current.points;
+      lastOrdinalRank = ordinalRank;
+      lastPercentile = percentile;
+    }
+    const overallUserData = overallRankedList.find(
+      item => item.user_id.toString() === user_id.toString()
+    );
+    if (!overallUserData) {
+      return res.status(404).json({ message: "User not found in overall rankings." });
+    }
+
+    // ---------------- Retrieve Onboarding Data for the Current User ----------------
+    const currentUserOnboarding = onboardingMap[user_id.toString()];
+    if (!currentUserOnboarding) {
+      return res.status(400).json({ message: "Onboarding data not found for current user." });
+    }
+    const userIndustry = currentUserOnboarding.industry;
+    const userDepartment = currentUserOnboarding.department;
+    if (!userIndustry) {
+      return res.status(400).json({ message: "User industry not found in onboarding data." });
+    }
+    if (!userDepartment) {
+      return res.status(400).json({ message: "User department not found in onboarding data." });
+    }
+
+    // ---------------- Industry Ranking ----------------
+    const industryList = progressList.filter(item => {
+      const onboarding = onboardingMap[item.user_id._id.toString()];
+      return onboarding && onboarding.industry === userIndustry;
+    });
+    const totalIndustry = industryList.length;
+    let industryRankedList = [];
+    lastPoints = null; lastOrdinalRank = 0; lastPercentile = 0;
+    for (let i = 0; i < totalIndustry; i++) {
+      const current = industryList[i];
+      let ordinalRank, percentile;
+      if (i === 0) {
+        ordinalRank = 1;
+        percentile = Math.ceil(((i + 1) / totalIndustry) * 100);
+      } else {
+        if (current.points === lastPoints) {
+          ordinalRank = lastOrdinalRank;
+          percentile = lastPercentile;
+        } else {
+          ordinalRank = i + 1;
+          percentile = Math.ceil(((i + 1) / totalIndustry) * 100);
+        }
+      }
+      industryRankedList.push({
+        user_id: current.user_id._id,
+        username: current.user_id.username,
+        points: current.points,
+        rank: ordinalRank,
+        percentileRank: percentile
+      });
+      lastPoints = current.points;
+      lastOrdinalRank = ordinalRank;
+      lastPercentile = percentile;
+    }
+    const industryUserData = industryRankedList.find(
+      item => item.user_id.toString() === user_id.toString()
+    );
+    if (!industryUserData) {
+      return res.status(404).json({ message: "User not found in industry rankings." });
+    }
+
+    // ---------------- Department Ranking ----------------
+    const departmentList = progressList.filter(item => {
+      const onboarding = onboardingMap[item.user_id._id.toString()];
+      return onboarding && onboarding.department === userDepartment;
+    });
+    const totalDepartment = departmentList.length;
+    let departmentRankedList = [];
+    lastPoints = null; lastOrdinalRank = 0; lastPercentile = 0;
+    for (let i = 0; i < totalDepartment; i++) {
+      const current = departmentList[i];
+      let ordinalRank, percentile;
+      if (i === 0) {
+        ordinalRank = 1;
+        percentile = Math.ceil(((i + 1) / totalDepartment) * 100);
+      } else {
+        if (current.points === lastPoints) {
+          ordinalRank = lastOrdinalRank;
+          percentile = lastPercentile;
+        } else {
+          ordinalRank = i + 1;
+          percentile = Math.ceil(((i + 1) / totalDepartment) * 100);
+        }
+      }
+      departmentRankedList.push({
+        user_id: current.user_id._id,
+        username: current.user_id.username,
+        points: current.points,
+        rank: ordinalRank,
+        percentileRank: percentile
+      });
+      lastPoints = current.points;
+      lastOrdinalRank = ordinalRank;
+      lastPercentile = percentile;
+    }
+    const departmentUserData = departmentRankedList.find(
+      item => item.user_id.toString() === user_id.toString()
+    );
+    if (!departmentUserData) {
+      return res.status(404).json({ message: "User not found in department rankings." });
+    }
+
+    // ---------------- Return Rankings with Counts and Names ----------------
+    return res.status(200).json({
+      message: "User rankings retrieved successfully",
+      overall: {
+        ranking: overallUserData,
+        totalUsers
+      },
+      industry: {
+        ranking: industryUserData,
+        industryName: userIndustry,
+        userCount: totalIndustry
+      },
+      department: {
+        ranking: departmentUserData,
+        departmentName: userDepartment,
+        userCount: totalDepartment
+      }
+    });
+  } catch (error) {
+    console.error("Error retrieving rankings:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+
+
+
 
 
 module.exports = {
@@ -732,4 +918,5 @@ module.exports = {
   getUserDailyPointsHeat,
   userRanking,
   userIndividualRanking,
+  userCompleteRanking
 };

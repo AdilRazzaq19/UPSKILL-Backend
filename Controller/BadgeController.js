@@ -100,10 +100,39 @@ const deleteBadge = async (req, res) => {
   }
 };
 
+const getBadgesByType = async (req, res) => {
+  try {
+    const { type } = req.query;
+    if (!type) {
+      return res.status(400).json({ message: "Badge type is required." });
+    }
+    const badges = await Badge.find({
+      type: { $regex: new RegExp(`^${type}$`, "i") }
+    });
+
+    if (!badges.length) {
+      return res.status(404).json({ message: `No badges found for type: ${type}` });
+    }
+
+    return res.status(200).json({
+      message: "Badges retrieved successfully.",
+      data: badges
+    });
+  } catch (error) {
+    console.error("Error retrieving badges:", error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   createBadge,
   getBadges,
   getBadgeById,
   updateBadge,
   deleteBadge,
+  getBadgesByType
 };
