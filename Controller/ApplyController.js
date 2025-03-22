@@ -85,7 +85,14 @@ exports.generateExercise = async (req, res) => {
     });
     await newExercise.save();
 
-    res.status(response.status).json(response.data);
+    res.status(200).json({
+      success: true,
+      message: "Exercise data retrieved from the database.",
+      data: {
+        message: "Practical exercise generated successfully",
+        content: response.data.content || response.data,
+      },
+    });
   } catch (err) {
     console.error("Error generating exercise:", err.message);
     res.status(err.response?.status || 500).json({
