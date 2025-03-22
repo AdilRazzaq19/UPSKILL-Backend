@@ -10,6 +10,6 @@ router.get("/getModuleBySection/:section_id",getModulesBySectionId);
 router.put("/update/:id", updateModule);
 router.delete("/delete/:id", deleteModule);
 router.get("/getModuleByUniqueId",getModuleDetailsByUniqueModuleId);
-router.put('/update/:id', updateModuleName);
+router.put('/name-update/:moduleId', updateModuleName);
 
 module.exports = router;

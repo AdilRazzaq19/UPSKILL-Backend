@@ -203,30 +203,44 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
 
 const updateModuleName = async (req, res) => {
   try {
-    const moduleId = req.params.id;
+    const moduleId = req.params.moduleId;
     const { name } = req.body;
-
-    // Validate that a valid module name is provided
+    
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ message: "A valid module name is required." });
     }
-
-    // Find the module document by its unique_ModuleID (instead of _id)
-    const moduleDoc = await Module.findOne({ unique_ModuleID: moduleId });
-    if (!moduleDoc) {
+    
+    // Use updateOne with a direct field query to avoid any ObjectId casting
+    const result = await Module.updateOne(
+      { unique_ModuleID: moduleId }, // Query by unique_ModuleID string
+      { $set: { name: name.trim() } }  // Update only the name field
+    );
+    
+    if (result.matchedCount === 0) {
       return res.status(404).json({ message: "Module not found." });
     }
-
-    // Update the module's name
-    moduleDoc.name = name.trim();
-    await moduleDoc.save();
-
-    res.status(200).json({ message: "Module name updated successfully.", module: moduleDoc });
+    
+    if (result.modifiedCount === 0) {
+      return res.status(200).json({ message: "No changes needed, module name is already up to date." });
+    }
+    
+    // Get the updated module to return in the response
+    const updatedModule = await Module.findOne({ unique_ModuleID: moduleId });
+    
+    return res.status(200).json({
+      message: "Module name updated successfully.",
+      module: updatedModule
+    });
+    
   } catch (error) {
     console.error("Error updating module name:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
+    });
   }
 };
+
 
 
 
