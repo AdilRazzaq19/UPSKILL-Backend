@@ -1,6 +1,7 @@
 // Controller/ChatController.js
 const axios = require('axios');
 const Onboarding = require('../Models/Onboarding'); 
+const Module = require("../Models/Module"); 
 
 const validatePayload = (req, res, next) => {
   const {
@@ -41,9 +42,9 @@ const videoChatController = async (req, res) => {
       req.body,
       {
         headers: {
-          'Content-Type': 'application/json',
-          'accept': 'application/json'
-        }
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
       }
     );
 
@@ -55,18 +56,31 @@ const videoChatController = async (req, res) => {
         { new: true }
       );
     }
+
+    const moduleId = response.data.module_id;
+    if (moduleId) {
+      const moduleDetail = await Module.findOne({ unique_ModuleID: moduleId }).populate('video');
+      if (moduleDetail) {
+        response.data.module_name = moduleDetail.name;
+        response.data.channel_name = moduleDetail.video ? moduleDetail.video.channel_name : null;
+      } else {
+        response.data.module_name = null;
+        response.data.channel_name = null;
+      }
+    }
+
     res.status(200).json(response.data);
   } catch (error) {
     console.error("Error calling external Video Chat API:", error.message);
     if (error.response && error.response.data) {
       return res.status(error.response.status).json({
         message: "Error from Video Chat API",
-        error: error.response.data
+        error: error.response.data,
       });
     }
     res.status(500).json({
       message: "Internal Server Error",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -78,31 +92,44 @@ const generalChatController = async (req, res) => {
       req.body,
       {
         headers: {
-          'Content-Type': 'application/json',
-          'accept': 'application/json'
-        }
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
       }
     );
+
     const newSessionId = response.data.session_id;
     if (newSessionId) {
       await Onboarding.findOneAndUpdate(
         { user_id: req.user._id },
         { generalChatSessionId: newSessionId },
-        { new: true }
+        { new: true, upsert: true } 
       );
     }
+    const moduleId = response.data.module_id;
+    if (moduleId) {
+      const moduleDetail = await Module.findOne({ unique_ModuleID: moduleId }).populate("video");
+      if (moduleDetail) {
+        response.data.module_name = moduleDetail.name;
+        response.data.channel_name = moduleDetail.video ? moduleDetail.video.channel_name : null;
+      } else {
+        response.data.module_name = null;
+        response.data.channel_name = null;
+      }
+    }
+
     res.status(200).json(response.data);
   } catch (error) {
     console.error("Error calling external General Chat API:", error.message);
     if (error.response && error.response.data) {
       return res.status(error.response.status).json({
         message: "Error from General Chat API",
-        error: error.response.data
+        error: error.response.data,
       });
     }
     res.status(500).json({
       message: "Internal Server Error",
-      error: error.message
+      error: error.message,
     });
   }
 };
