@@ -20,12 +20,15 @@
     "iso8601-duration": "^2.1.2",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
+    "markdown-json": "^1.6.1",
     "mongoose": "^8.10.1",
     "nodemon": "^3.1.9",
     "passport": "^0.7.0",
     "passport-apple": "^2.0.2",
     "passport-google-oauth20": "^2.0.0",
     "passport-linkedin-oauth2": "^2.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
     "upskillme": "file:"
   }
 }

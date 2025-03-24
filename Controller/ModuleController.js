@@ -171,9 +171,10 @@ const deleteModule = async (req, res) => {
 
 const getModuleDetailsByUniqueModuleId = async (req, res) => {
   try {
-    const { unique_ModuleID } = req.body;
+    // Retrieve unique_ModuleID from the query string
+    const { unique_ModuleID } = req.query;
     if (!unique_ModuleID) {
-      return res.status(400).json({ message: "unique_ModuleID is required in the payload." });
+      return res.status(400).json({ message: "unique_ModuleID is required as a query parameter." });
     }
 
     const moduleData = await Module.findOne({ unique_ModuleID })
@@ -188,7 +189,7 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
       moduleName: moduleData.name,
       sectionName: moduleData.section_id ? moduleData.section_id.name : null,
       videoTitle: moduleData.video ? moduleData.video.title : null,
-      moduleDescription:moduleData.description,
+      moduleDescription: moduleData.description,
     };
 
     res.status(200).json({
@@ -200,6 +201,11 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
+
+
+
+
 
 const updateModuleName = async (req, res) => {
   try {

@@ -9,7 +9,7 @@ router.get("/getIndividual/:module_id", getModuleById);
 router.get("/getModuleBySection/:section_id",getModulesBySectionId);
 router.put("/update/:id", updateModule);
 router.delete("/delete/:id", deleteModule);
-router.get("/getModuleByUniqueId",getModuleDetailsByUniqueModuleId);
+router.get("/getModuleByUniqueId", getModuleDetailsByUniqueModuleId);
 router.put('/name-update/:moduleId', updateModuleName);
 
 module.exports = router;
