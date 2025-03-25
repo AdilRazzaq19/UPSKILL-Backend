@@ -79,7 +79,6 @@ exports.generateExercise = async (req, res) => {
       }
     );
 
-    // Store the raw response data without parsing
     const newExercise = new Exercise({
       user_id: payload.user_id,
       video_id: payload.video_id,
