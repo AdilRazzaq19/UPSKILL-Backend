@@ -69,7 +69,9 @@ const submitFeedback = async (req, res) => {
     }
 
     await userProgress.save();
-
+    userProgress = await UserProgress.findById(userProgress._id)
+    .populate("badges")
+    .populate("learnedSkills");
     return res.status(201).json({
       message: "Feedback submitted successfully. Points awarded and badges updated.",
       feedback: newFeedback,
