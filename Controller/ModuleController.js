@@ -1,5 +1,6 @@
 const Module = require("../Models/Module");
 const Section = require("../Models/Section");
+const FlashcardResponse = require("../Models/FlashCard");
 
   const createModule = async (req, res) => {
     try {
@@ -52,8 +53,8 @@ const Section = require("../Models/Section");
     }
   };
 
-  
 
+  
   const getModules = async (req, res) => {
     try {
       const modules = await Module.find()
@@ -67,8 +68,46 @@ const Section = require("../Models/Section");
         })
         .populate({
           path: "video",
-          select: "_id youtubeVideo_id video_url channel_name"
-        });
+          select: "_id youtubeVideo_id video_url channel_name publish_date likes_count views_count"
+        })
+        .lean();
+  
+      // Extract all youtubeVideo_ids from the modules that have video details.
+      const videoIds = modules
+        .filter(mod => mod.video && mod.video.youtubeVideo_id)
+        .map(mod => mod.video.youtubeVideo_id);
+  
+      const flashcards = await FlashcardResponse.find({
+        video_id: { $in: videoIds },
+        section: "introduction"
+      }).lean();
+  
+      const flashcardMap = {};
+      flashcards.forEach(fc => {
+        flashcardMap[fc.video_id] = fc.content;
+      });
+  
+      const extractFirstParagraph = (content) => {
+        if (!content) return "";
+        content = content.replace(/#\s*Topic Overview\s*/i, "");
+        const paragraphs = content.split(/\n\s*\n/);
+        for (let p of paragraphs) {
+          const trimmed = p.trim();
+          if (trimmed) {
+            return trimmed;
+          }
+        }
+        return "";
+      };
+  
+      modules.forEach(moduleObj => {
+        if (moduleObj.video && moduleObj.video.youtubeVideo_id) {
+          const fcContent = flashcardMap[moduleObj.video.youtubeVideo_id];
+          moduleObj.introduction = fcContent ? extractFirstParagraph(fcContent) : null;
+        } else {
+          moduleObj.introduction = null;
+        }
+      });
   
       res.status(200).json(modules);
     } catch (error) {
@@ -76,9 +115,6 @@ const Section = require("../Models/Section");
       res.status(500).json({ message: "Internal Server Error" });
     }
   };
-  
-  
-  
   
 
 
