@@ -153,7 +153,8 @@ const addUserLearningByUniqueModule = async (req, res) => {
     const section_id = moduleDoc.section_id._id;
     const section_name = moduleDoc.section_id.name;
     const modName = moduleDoc.name;
-    const uniqueModuleID = moduleDoc.unique_ModuleID;
+    // Ensure we use a consistent variable name and store as string.
+    const uniqueModuleID = moduleDoc.unique_ModuleID.toString();
     const theme_id = moduleDoc.section_id.theme_id._id;
     const theme_name = moduleDoc.section_id.theme_id.name;
 
@@ -164,17 +165,25 @@ const addUserLearningByUniqueModule = async (req, res) => {
     console.log("Theme ID:", theme_id);
     console.log("Theme Name:", theme_name);
 
-    // Find (or create) the consolidated UserLearning document for this user.
+    // Get the latest UserLearning document for this user.
     let userLearning = await UserLearning.findOne({ user_id });
     if (!userLearning) {
       userLearning = new UserLearning({ user_id, sections: [] });
+      await userLearning.save();
+      console.log("Created new UserLearning document for user.");
     }
 
-    // Look for an existing section entry within the "sections" array.
+    // Ensure the sections array exists.
+    if (!userLearning.sections) {
+      userLearning.sections = [];
+    }
+
+    // Look for an existing section entry for the current section.
     let sectionEntry = userLearning.sections.find(sec =>
       sec.section_id.toString() === section_id.toString()
     );
     if (!sectionEntry) {
+      // Create a new section entry if not found.
       sectionEntry = {
         section_id,
         theme_id,
@@ -182,38 +191,23 @@ const addUserLearningByUniqueModule = async (req, res) => {
         ai_recommendation: []
       };
       userLearning.sections.push(sectionEntry);
+      userLearning.markModified("sections");
+      console.log(`Created new section entry for section: ${section_name}`);
     }
 
-    // Ensure that the arrays exist.
+    // Ensure that the arrays exist in the section entry.
     if (!sectionEntry.modules) sectionEntry.modules = [];
     if (!sectionEntry.ai_recommendation) sectionEntry.ai_recommendation = [];
 
-    // Ensure each existing module in this section has an order field.
-    sectionEntry.modules = sectionEntry.modules.map((mod, index) => {
-      if (!mod.order) {
-        mod.order = index + 1;
-      }
-      return mod;
+    // Check for duplicate module (using unique_ModuleID)
+    const existsInModules = sectionEntry.modules.some(mod => {
+      return mod.unique_ModuleID && mod.unique_ModuleID.toString() === uniqueModuleID;
     });
-    sectionEntry.ai_recommendation = sectionEntry.ai_recommendation.map((rec, index) => {
-      if (!rec.order) {
-        rec.order = index + 1;
-      }
-      return rec;
+    const existsInAIRec = sectionEntry.ai_recommendation.some(rec => {
+      return rec.unique_ModuleID && rec.unique_ModuleID.toString() === uniqueModuleID;
     });
-
-    // Check if the module is already added (in either modules or AI recommendations)
-    const existsInModules = sectionEntry.modules.some(
-      mod => mod.unique_ModuleID === uniqueModuleID
-    );
-    const existsInAIRec = sectionEntry.ai_recommendation.some(
-      rec => rec.unique_ModuleID === uniqueModuleID
-    );
-    if (existsInModules) {
+    if (existsInModules || existsInAIRec) {
       return res.status(400).json({ message: "This module is already in your learning preferences." });
-    }
-    if (existsInAIRec) {
-      return res.status(400).json({ message: "This module is already in your AI recommended list." });
     }
 
     // Determine the order for the new module.
@@ -227,11 +221,14 @@ const addUserLearningByUniqueModule = async (req, res) => {
       completed: false,
       order: newModuleOrder
     });
+    console.log(`Module "${modName}" added to section "${section_name}".`);
 
+    // Save the updated UserLearning document and re-fetch to ensure fresh data.
     await userLearning.save();
-    console.log("Module added to UserLearning for section:", section_name);
+    userLearning = await UserLearning.findOne({ user_id });
+    console.log("UserLearning document saved and re-fetched.");
 
-    // Update user progress
+    // Update user progress (this part remains unchanged)
     let userProgress = await UserProgress.findOne({ user_id });
     if (!userProgress) {
       userProgress = new UserProgress({
@@ -239,6 +236,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
         section_progress: [],
         completed_modules: []
       });
+      console.log("Created new UserProgress document for user.");
     }
     const sectionExists = userProgress.section_progress.find(
       sec => sec.section_id.toString() === section_id.toString()
@@ -250,6 +248,7 @@ const addUserLearningByUniqueModule = async (req, res) => {
       });
     }
     await userProgress.save();
+    console.log("UserProgress updated.");
 
     res.status(201).json({
       message: "Module added successfully",

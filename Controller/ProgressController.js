@@ -339,89 +339,39 @@ const completeModule = async (req, res) => {
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
     // --- Update the UserLearning document (consolidated schema) ---
-    // Find the consolidated UserLearning document for the user.
     let userLearning = await UserLearning.findOne({ user_id: userId });
     if (!userLearning) {
       return res.status(404).json({ message: "User learning record not found." });
     }
     
-    // Keep track if we found and updated the module
-    let moduleUpdated = false;
-    
-    console.log("Attempting to mark module as completed:", module_id);
-    
-    // First check in aiRecommendations
-    if (userLearning.aiRecommendations && Array.isArray(userLearning.aiRecommendations)) {
-      for (const section of userLearning.aiRecommendations) {
-        if (section.modules && Array.isArray(section.modules)) {
-          for (const mod of section.modules) {
-            if (mod.id && mod.id.toString() === module_id) {
-              mod.completed = true;
-              moduleUpdated = true;
-              console.log(`Module marked completed in aiRecommendations section: ${section.name}`);
-            }
-          }
-        }
-      }
-      userLearning.markModified("aiRecommendations");
-    }
-    
-    // Check in userPreferenceModules
-    if (!moduleUpdated && userLearning.userPreferenceModules && Array.isArray(userLearning.userPreferenceModules)) {
-      for (const section of userLearning.userPreferenceModules) {
-        if (section.modules && Array.isArray(section.modules)) {
-          for (const mod of section.modules) {
-            if (mod.id && mod.id.toString() === module_id) {
-              mod.completed = true;
-              moduleUpdated = true;
-              console.log(`Module marked completed in userPreferenceModules section: ${section.name}`);
-            }
-          }
-        }
-      }
-      userLearning.markModified("userPreferenceModules");
-    }
-    
-    // Legacy structure: Check in sections if still not found
-    if (!moduleUpdated && userLearning.sections && Array.isArray(userLearning.sections)) {
-      for (const section of userLearning.sections) {
-        if (section.modules && Array.isArray(section.modules)) {
-          for (const mod of section.modules) {
-            if ((mod.module_id && mod.module_id.toString() === module_id) || (mod.id && mod.id.toString() === module_id)) {
-              mod.completed = true;
-              if (typeof mod.video_progress !== 'undefined') {
-                mod.video_progress = 100;
+    // Mark module as completed in all sections/arrays where it might appear.
+    const markModuleCompleted = (arr) => {
+      if (arr && Array.isArray(arr)) {
+        arr.forEach(section => {
+          if (section.modules && Array.isArray(section.modules)) {
+            section.modules.forEach(mod => {
+              if ((mod.module_id && mod.module_id.toString() === module_id) || (mod.id && mod.id.toString() === module_id)) {
+                mod.completed = true;
+                if (typeof mod.video_progress !== "undefined") {
+                  mod.video_progress = 100;
+                }
               }
-              moduleUpdated = true;
-              console.log(`Module marked completed in legacy section.modules structure`);
-            }
+            });
           }
-        }
-        if (section.ai_recommendation && Array.isArray(section.ai_recommendation)) {
-          for (const mod of section.ai_recommendation) {
-            if ((mod.module_id && mod.module_id.toString() === module_id) || (mod.id && mod.id.toString() === module_id)) {
-              mod.completed = true;
-              if (typeof mod.video_progress !== 'undefined') {
-                mod.video_progress = 100;
-              }
-              moduleUpdated = true;
-              console.log(`Module marked completed in legacy section.ai_recommendation structure`);
-            }
-          }
-        }
+        });
       }
-      userLearning.markModified("sections");
-    }
-    
-    if (!moduleUpdated) {
-      console.log(`Warning: Module ${module_id} not found in any section of UserLearning document.`);
-      console.log("UserLearning structure summary:");
-      if (userLearning.aiRecommendations) console.log(`- aiRecommendations: ${userLearning.aiRecommendations.length} sections`);
-      if (userLearning.userPreferenceModules) console.log(`- userPreferenceModules: ${userLearning.userPreferenceModules.length} sections`);
-      if (userLearning.sections) console.log(`- sections: ${userLearning.sections.length} sections`);
-    } else {
-      console.log(`Successfully marked module ${module_id} as completed`);
-    }
+    };
+
+    // Check all arrays in userLearning.
+    markModuleCompleted(userLearning.aiRecommendations);
+    markModuleCompleted(userLearning.userPreferenceModules);
+    markModuleCompleted(userLearning.sections);
+    // Mark as modified after updating.
+    userLearning.markModified("aiRecommendations");
+    userLearning.markModified("userPreferenceModules");
+    userLearning.markModified("sections");
+  
+    console.log(`Module ${module_id} marked as completed in user learning.`);
   
     // Update streaks and other progress metrics.
     await updateStreaks(progress);
@@ -518,6 +468,7 @@ const completeModule = async (req, res) => {
       select: "uniqueSkill_id skill_theme skill_Name skill_description"
     });
     console.log("Videos in module:", videosInModulePopulated);
+  
     // Extract skills from module videos (allow duplicates so the count accumulates)
     const moduleLearnedSkills = [];
     videosInModulePopulated.forEach(video => {
@@ -532,17 +483,15 @@ const completeModule = async (req, res) => {
         });
       }
     });
-
+  
     // Ensure learnedSkills array exists
     if (!progress.learnedSkills) {
       progress.learnedSkills = [];
     }
-
+  
     // Accumulate all learned skills from this module (do not filter out duplicates)
     progress.learnedSkills.push(...moduleLearnedSkills);
     console.log("Accumulated learned skills after module:", progress.learnedSkills);
-
-
   
     // Award skill badges using the new occurrences from this module
     await awardSkillBadges(progress, moduleLearnedSkills);
@@ -657,6 +606,7 @@ const completeModule = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 
 const getSkillChartData = async (req, res) => {
