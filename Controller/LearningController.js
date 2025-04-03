@@ -338,7 +338,7 @@ const getUserLearningProgress = async (req, res) => {
         select: "name video",
         populate: {
           path: "video",
-          select: "channel_name"
+          select: "channel_name likes_count views_count publish_date"
         }
       })
       .populate({
@@ -346,7 +346,7 @@ const getUserLearningProgress = async (req, res) => {
         select: "name video",
         populate: {
           path: "video",
-          select: "channel_name"
+          select: "channel_name likes_count views_count publish_date"
         }
       });
 
@@ -377,7 +377,12 @@ const getUserLearningProgress = async (req, res) => {
           name: rec.module_id ? rec.module_id.name : rec.module_name || "Unknown Module",
           completed: rec.completed,
           video: rec.module_id && rec.module_id.video
-            ? { channelName: rec.module_id.video.channel_name }
+            ? {
+                channelName: rec.module_id.video.channel_name,
+                publish_date: rec.module_id.video.publish_date,
+                likes_count: rec.module_id.video.likes_count,
+                views_count: rec.module_id.video.views_count
+              }
             : {},
           aiModuleTitle: rec.ai_module_title || null,
           relevanceStatement: rec.relevance_statement || null
@@ -398,7 +403,12 @@ const getUserLearningProgress = async (req, res) => {
           name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
           completed: mod.completed,
           video: mod.module_id && mod.module_id.video
-            ? { channelName: mod.module_id.video.channel_name }
+            ? {
+                channelName: mod.module_id.video.channel_name,
+                publish_date: mod.module_id.video.publish_date,
+                likes_count: mod.module_id.video.likes_count,
+                views_count: mod.module_id.video.views_count
+              }
             : {},
           aiModuleTitle: mod.ai_module_title || null,
           relevanceStatement: mod.relevance_statement || null
@@ -426,6 +436,7 @@ const getUserLearningProgress = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 const getAllLearningModules = async (req, res) => {
   try {
     const user_id = req.user.id;
@@ -437,7 +448,7 @@ const getAllLearningModules = async (req, res) => {
         select: "name video",
         populate: {
           path: "video",
-          select: "channel_name"
+          select: "channel_name likes_count views_count publish_date"
         }
       })
       .populate({
@@ -445,7 +456,7 @@ const getAllLearningModules = async (req, res) => {
         select: "name video",
         populate: {
           path: "video",
-          select: "channel_name"
+          select: "channel_name likes_count views_count publish_date"
         }
       });
 
@@ -465,7 +476,12 @@ const getAllLearningModules = async (req, res) => {
             name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
             completed: mod.completed,
             video: mod.module_id && mod.module_id.video
-              ? { channelName: mod.module_id.video.channel_name }
+              ? {
+                  channelName: mod.module_id.video.channel_name,
+                  publish_date: mod.module_id.video.publish_date,
+                  likes_count: mod.module_id.video.likes_count,
+                  views_count: mod.module_id.video.views_count
+                }
               : {}
           };
           allModules.push(moduleObj);
@@ -479,7 +495,12 @@ const getAllLearningModules = async (req, res) => {
             name: rec.module_id ? rec.module_id.name : rec.module_name || "Unknown Module",
             completed: rec.completed,
             video: rec.module_id && rec.module_id.video
-              ? { channelName: rec.module_id.video.channel_name }
+              ? {
+                  channelName: rec.module_id.video.channel_name,
+                  publish_date: rec.module_id.video.publish_date,
+                  likes_count: rec.module_id.video.likes_count,
+                  views_count: rec.module_id.video.views_count
+                }
               : {}
           };
           allModules.push(moduleObj);
@@ -496,6 +517,7 @@ const getAllLearningModules = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 const updateUserLearningProgress = async (req, res) => {
   try {
