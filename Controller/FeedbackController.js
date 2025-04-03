@@ -2,13 +2,22 @@ const Feedback = require("../Models/Userfeedback");
 const Module = require("../Models/Module");
 const User = require("../Models/User");
 const UserProgress = require("../Models/userProgress");
-const Badge = require("../Models/Badge"); 
+const Badge = require("../Models/Badge");
 
+// Updated awardBadgeOnce that stores badges as subdocuments with 'badge' and 'awarded_at'
 const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
-  const allocatedBadgeIds = progress.badges.map(b => b.toString());
+  if (!progress.badges) {
+    progress.badges = [];
+  }
+  // Extract awarded badge IDs from subdocuments
+  const allocatedBadgeIds = progress.badges
+    .filter(b => b && b.badge)
+    .map(b => b.badge.toString());
+    
   const badge = await Badge.findOne({ name: badgeName });
   if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
-    progress.badges.push(badge._id);
+    // Push as an object with badge and awarded_at fields.
+    progress.badges.push({ badge: badge._id, awarded_at: new Date() });
     if (targetPointsField && progress[targetPointsField] !== undefined) {
       progress[targetPointsField] += badge.points;
     }
@@ -56,8 +65,11 @@ const submitFeedback = async (req, res) => {
     if (!userProgress) {
       userProgress = new UserProgress({ user_id, points: 0, badges: [] });
     }
+
+    // Award badge for rating the module.
     await awardBadgeOnce(userProgress, "Rating the module");
 
+    // If a feedback comment exists, award additional badges.
     if (feedback_text && feedback_text.trim().length > 0) {
       await awardBadgeOnce(userProgress, "Leaving a short comment");
       if (/suggest/i.test(feedback_text)) {
@@ -69,9 +81,11 @@ const submitFeedback = async (req, res) => {
     }
 
     await userProgress.save();
+    // Populate nested badge field and learnedSkills
     userProgress = await UserProgress.findById(userProgress._id)
-    .populate("badges")
-    .populate("learnedSkills");
+      .populate("badges.badge")
+      .populate("learnedSkills");
+
     return res.status(201).json({
       message: "Feedback submitted successfully. Points awarded and badges updated.",
       feedback: newFeedback,

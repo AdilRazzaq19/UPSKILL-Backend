@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
+// Schema for module details (both user-preferred and AI recommendations)
 const ModuleLearningSchema = new Schema({
   order: { type: Number, required: true },
   module_id: {
@@ -30,6 +31,23 @@ const ModuleLearningSchema = new Schema({
   },
 });
 
+// Schema for a learning section with its theme and module arrays
+const SectionLearningSchema = new Schema({
+  section_id: {
+    type: Schema.Types.ObjectId,
+    ref: "Section",
+    required: true,
+  },
+  theme_id: {
+    type: Schema.Types.ObjectId,
+    ref: "Theme",
+    required: true,
+  },
+  modules: [ModuleLearningSchema],         
+  ai_recommendation: [ModuleLearningSchema], 
+}, { _id: false }); 
+
+// Consolidated UserLearning schema for a single user
 const UserLearningSchema = new Schema(
   {
     user_id: {
@@ -37,18 +55,7 @@ const UserLearningSchema = new Schema(
       ref: "User",
       required: true,
     },
-    theme_id: {
-      type: Schema.Types.ObjectId,
-      ref: "Theme",
-      required: true,
-    },
-    section_id: {
-      type: Schema.Types.ObjectId,
-      ref: "Section",
-      required: true,
-    },
-    modules: [ModuleLearningSchema],
-    ai_recommendation: [ModuleLearningSchema],
+    sections: [SectionLearningSchema],
   },
   { timestamps: true }
 );

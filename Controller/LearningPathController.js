@@ -95,11 +95,156 @@ exports.checkExistingLearningPath = async (req, res, next) => {
   }
 };
 
+  // exports.generateLearningPath = async (req, res) => {
+  //   try {
+  //     const payload = req.body;
+  //     console.log("Generating learning path with payload:", payload);
+
+  //     const aiApiUrl = "http://15.237.7.12/v2/generate_learning_path";
+  //     const response = await axios.post(aiApiUrl, payload, {
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         accept: "application/json",
+  //       },
+  //     });
+  //     console.log("AI API response received");
+
+  //     // Parse analysis data
+  //     let { analysis } = response.data;
+  //     if (typeof analysis === "string") {
+  //       // Remove markdown code block markers if present
+  //       analysis = analysis.trim();
+  //       if (analysis.startsWith("```json")) {
+  //         analysis = analysis.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+  //       } else if (analysis.startsWith("```")) {
+  //         analysis = analysis.replace(/^```\s*/, "").replace(/\s*```$/, "");
+  //       }
+        
+  //       try {
+  //         analysis = JSON.parse(analysis);
+  //         console.log("Parsed analysis JSON successfully");
+  //       } catch (parseError) {
+  //         console.error("Error parsing analysis:", parseError);
+  //         throw new Error("Invalid analysis JSON format from AI API");
+  //       }
+  //     }
+
+  //     // Update or create the LearningPath document
+  //     let existingLP = await LearningPath.findOne({ user_id: payload.user_id });
+  //     if (existingLP) {
+  //       existingLP.payload = req.body; // Overwrite with the new payload
+  //       existingLP.analysis = analysis;
+  //       await existingLP.save();
+  //       console.log("Updated existing LearningPath document for user:", payload.user_id);
+  //     } else {
+  //       existingLP = new LearningPath({
+  //         user_id: payload.user_id,
+  //         payload: req.body,
+  //         analysis,
+  //       });
+  //       await existingLP.save();
+  //       console.log("Saved new LearningPath document for user:", payload.user_id);
+  //     }
+
+  //     // Process each section in the analysis for UserLearning updates
+  //     for (const section of analysis) {
+  //       console.log("Processing section:", section.section_name);
+
+  //       // Sort modules by order to preserve the specified sequence.
+  //       const sortedModules = section.modules.sort((a, b) => a.order - b.order);
+  //       console.log("Sorted modules for section:", sortedModules);
+
+  //       const userLearningModules = [];
+  //       let sectionId = null;
+
+  //       // Process every module in the section
+  //       for (let i = 0; i < sortedModules.length; i++) {
+  //         const mod = sortedModules[i];
+  //         // Look up the module using its unique module identifier
+  //         const moduleDoc = await Module.findOne({ unique_ModuleID: mod.module_id });
+  //         if (moduleDoc) {
+  //           // Set sectionId from the first module found in the section
+  //           if (!sectionId) {
+  //             sectionId = moduleDoc.section_id;
+  //           }
+  //           // Build the module learning object using your schema:
+  //           userLearningModules.push({
+  //             order: mod.order || (i + 1), // Use provided order or fallback to index+1
+  //             module_id: moduleDoc._id, // ObjectId reference from Module document
+  //             unique_ModuleID: moduleDoc.unique_ModuleID, // Unique module identifier (string)
+  //             module_name: moduleDoc.name, // Original module title from the DB
+  //             ai_module_title: mod.module_title || "", // AI recommended module title
+  //             relevance_statement: mod.relevance_statement || "", // AI relevance statement
+  //             completed: false,
+  //           });
+  //         } else {
+  //           console.log("Module not found for unique_ModuleID:", mod.module_id);
+  //         }
+  //       }
+
+  //       console.log("Final ordered modules for section", section.section_name, ":", userLearningModules);
+
+  //       // Retrieve theme_id from the Section document using sectionId
+  //       let themeId = null;
+  //       if (sectionId) {
+  //         const sectionDoc = await Section.findById(sectionId);
+  //         if (sectionDoc && sectionDoc.theme_id) {
+  //           themeId = sectionDoc.theme_id;
+  //         } else {
+  //           console.log("No theme_id found in Section for section_id:", sectionId);
+  //         }
+  //       }
+
+  //       // Update or create a UserLearning record for this section.
+  //       if (userLearningModules.length > 0 && sectionId) {
+  //         let existingUserLearning = await UserLearning.findOne({
+  //           user_id: payload.user_id,
+  //           theme_id: themeId,
+  //           section_id: sectionId,
+  //         });
+  //         if (existingUserLearning) {
+  //           // Overwrite only the ai_recommendation field while preserving user-preferred modules.
+  //           existingUserLearning.ai_recommendation = userLearningModules;
+  //           await existingUserLearning.save();
+  //           console.log("Updated UserLearning document (ai_recommendation) for section_id:", sectionId);
+  //         } else {
+  //           const newUserLearning = new UserLearning({
+  //             user_id: payload.user_id,
+  //             theme_id: themeId,
+  //             section_id: sectionId,
+  //             ai_recommendation: userLearningModules,
+  //             modules: [] // Initially empty for user-preferred modules
+  //           });
+  //           await newUserLearning.save();
+  //           console.log("Created new UserLearning document (ai_recommendation) for section_id:", sectionId);
+  //         }
+  //       } else {
+  //         console.log("No valid modules or sectionId found for section:", section.section_name);
+  //       }
+  //     }
+
+  //     // Return the updated LearningPath document, including AI recommendation details
+  //     res.status(200).json({
+  //       success: true,
+  //       message: "Learning path data retrieved from the database.",
+  //       data: existingLP,
+  //     });
+  //   } catch (err) {
+  //     console.error("Error generating learning path:", err.response ? err.response.data : err.message);
+  //     res.status(err.response?.status || 500).json({
+  //       success: false,
+  //       message: err.response?.data?.message || "Failed to generate learning path",
+  //     });
+  //   }
+  // };
+
+
+
   exports.generateLearningPath = async (req, res) => {
     try {
       const payload = req.body;
       console.log("Generating learning path with payload:", payload);
-
+  
       const aiApiUrl = "http://15.237.7.12/v2/generate_learning_path";
       const response = await axios.post(aiApiUrl, payload, {
         headers: {
@@ -108,7 +253,7 @@ exports.checkExistingLearningPath = async (req, res, next) => {
         },
       });
       console.log("AI API response received");
-
+  
       // Parse analysis data
       let { analysis } = response.data;
       if (typeof analysis === "string") {
@@ -128,7 +273,7 @@ exports.checkExistingLearningPath = async (req, res, next) => {
           throw new Error("Invalid analysis JSON format from AI API");
         }
       }
-
+  
       // Update or create the LearningPath document
       let existingLP = await LearningPath.findOne({ user_id: payload.user_id });
       if (existingLP) {
@@ -145,46 +290,50 @@ exports.checkExistingLearningPath = async (req, res, next) => {
         await existingLP.save();
         console.log("Saved new LearningPath document for user:", payload.user_id);
       }
-
-      // Process each section in the analysis for UserLearning updates
+  
+      // Consolidate all learning data into one UserLearning document for this user.
+      let userLearning = await UserLearning.findOne({ user_id: payload.user_id });
+      if (!userLearning) {
+        // Create a new document with an empty sections array.
+        userLearning = new UserLearning({ user_id: payload.user_id, sections: [] });
+      }
+  
+      // Process each section in the analysis.
       for (const section of analysis) {
         console.log("Processing section:", section.section_name);
-
-        // Sort modules by order to preserve the specified sequence.
+  
+        // Sort modules by order.
         const sortedModules = section.modules.sort((a, b) => a.order - b.order);
         console.log("Sorted modules for section:", sortedModules);
-
+  
         const userLearningModules = [];
         let sectionId = null;
-
-        // Process every module in the section
+  
+        // Process every module in the section.
         for (let i = 0; i < sortedModules.length; i++) {
           const mod = sortedModules[i];
-          // Look up the module using its unique module identifier
+          // Look up the module using its unique module identifier.
           const moduleDoc = await Module.findOne({ unique_ModuleID: mod.module_id });
           if (moduleDoc) {
-            // Set sectionId from the first module found in the section
             if (!sectionId) {
               sectionId = moduleDoc.section_id;
             }
-            // Build the module learning object using your schema:
             userLearningModules.push({
-              order: mod.order || (i + 1), // Use provided order or fallback to index+1
-              module_id: moduleDoc._id, // ObjectId reference from Module document
-              unique_ModuleID: moduleDoc.unique_ModuleID, // Unique module identifier (string)
-              module_name: moduleDoc.name, // Original module title from the DB
-              ai_module_title: mod.module_title || "", // AI recommended module title
-              relevance_statement: mod.relevance_statement || "", // AI relevance statement
+              order: mod.order || (i + 1),
+              module_id: moduleDoc._id,
+              unique_ModuleID: moduleDoc.unique_ModuleID,
+              module_name: moduleDoc.name,
+              ai_module_title: mod.module_title || "",
+              relevance_statement: mod.relevance_statement || "",
               completed: false,
             });
           } else {
             console.log("Module not found for unique_ModuleID:", mod.module_id);
           }
         }
-
         console.log("Final ordered modules for section", section.section_name, ":", userLearningModules);
-
-        // Retrieve theme_id from the Section document using sectionId
+  
+        // Retrieve theme_id from the Section document using sectionId.
         let themeId = null;
         if (sectionId) {
           const sectionDoc = await Section.findById(sectionId);
@@ -194,40 +343,33 @@ exports.checkExistingLearningPath = async (req, res, next) => {
             console.log("No theme_id found in Section for section_id:", sectionId);
           }
         }
-
-        // Update or create a UserLearning record for this section.
-        if (userLearningModules.length > 0 && sectionId) {
-          let existingUserLearning = await UserLearning.findOne({
-            user_id: payload.user_id,
-            theme_id: themeId,
-            section_id: sectionId,
-          });
-          if (existingUserLearning) {
-            // Overwrite only the ai_recommendation field while preserving user-preferred modules.
-            existingUserLearning.ai_recommendation = userLearningModules;
-            await existingUserLearning.save();
-            console.log("Updated UserLearning document (ai_recommendation) for section_id:", sectionId);
-          } else {
-            const newUserLearning = new UserLearning({
-              user_id: payload.user_id,
-              theme_id: themeId,
-              section_id: sectionId,
-              ai_recommendation: userLearningModules,
-              modules: [] // Initially empty for user-preferred modules
-            });
-            await newUserLearning.save();
-            console.log("Created new UserLearning document (ai_recommendation) for section_id:", sectionId);
-          }
+  
+        // Check if this section already exists in the consolidated document.
+        let sectionEntry = userLearning.sections.find(
+          s => s.section_id.toString() === sectionId.toString()
+        );
+        if (sectionEntry) {
+          // Update the ai_recommendation field.
+          sectionEntry.ai_recommendation = userLearningModules;
         } else {
-          console.log("No valid modules or sectionId found for section:", section.section_name);
+          // Add a new entry.
+          userLearning.sections.push({
+            section_id: sectionId,
+            theme_id: themeId,
+            ai_recommendation: userLearningModules,
+            modules: [] // For user-preferred modules (initially empty)
+          });
         }
       }
-
-      // Return the updated LearningPath document, including AI recommendation details
+  
+      await userLearning.save();
+      console.log("UserLearning document updated for user:", payload.user_id);
+  
+      // Return the updated LearningPath and consolidated UserLearning.
       res.status(200).json({
         success: true,
-        message: "Learning path data retrieved from the database.",
-        data: existingLP,
+        message: "Learning path data retrieved and user learning updated.",
+        data:existingLP
       });
     } catch (err) {
       console.error("Error generating learning path:", err.response ? err.response.data : err.message);
@@ -237,3 +379,4 @@ exports.checkExistingLearningPath = async (req, res, next) => {
       });
     }
   };
+  
