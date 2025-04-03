@@ -59,9 +59,11 @@ const videoChatController = async (req, res) => {
 
     const moduleId = response.data.module_id;
     if (moduleId) {
+      // Query the module by unique_ModuleID to get its ObjectId.
       const moduleDetail = await Module.findOne({ unique_ModuleID: moduleId }).populate('video');
       if (moduleDetail) {
         response.data.module_name = moduleDetail.name;
+        response.data.module_object_id = moduleDetail._id; // ObjectId from the DB.
         response.data.channel_name = moduleDetail.video ? moduleDetail.video.channel_name : null;
       } else {
         response.data.module_name = null;
@@ -85,6 +87,8 @@ const videoChatController = async (req, res) => {
   }
 };
 
+
+
 const generalChatController = async (req, res) => {
   try {
     const response = await axios.post(
@@ -103,17 +107,20 @@ const generalChatController = async (req, res) => {
       await Onboarding.findOneAndUpdate(
         { user_id: req.user._id },
         { generalChatSessionId: newSessionId },
-        { new: true, upsert: true } 
+        { new: true, upsert: true }
       );
     }
     const moduleId = response.data.module_id;
     if (moduleId) {
+      // Query module by unique_ModuleID and populate its video field.
       const moduleDetail = await Module.findOne({ unique_ModuleID: moduleId }).populate("video");
       if (moduleDetail) {
         response.data.module_name = moduleDetail.name;
+        response.data.module_object_id = moduleDetail._id; // The module's ObjectId
         response.data.channel_name = moduleDetail.video ? moduleDetail.video.channel_name : null;
       } else {
         response.data.module_name = null;
+        response.data.module_object_id = null;
         response.data.channel_name = null;
       }
     }
@@ -133,6 +140,7 @@ const generalChatController = async (req, res) => {
     });
   }
 };
+
 
 const getChatHistory = async (req, res) => {
   try {

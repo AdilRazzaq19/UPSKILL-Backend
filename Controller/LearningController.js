@@ -629,10 +629,10 @@ const getLearningModuleById = async (req, res) => {
       return res.status(400).json({ message: "Module ID is required" });
     }
 
-    // Retrieve all UserLearning documents for the user with proper population.
+    // Retrieve UserLearning documents for the user and populate nested modules.
     const userLearnings = await UserLearning.find({ user_id })
       .populate({
-        path: "modules.module_id",
+        path: "sections.modules.module_id",
         select: "name video",
         populate: {
           path: "video",
@@ -640,7 +640,7 @@ const getLearningModuleById = async (req, res) => {
         }
       })
       .populate({
-        path: "ai_recommendation.module_id",
+        path: "sections.ai_recommendation.module_id",
         select: "name video",
         populate: {
           path: "video",
@@ -654,48 +654,53 @@ const getLearningModuleById = async (req, res) => {
 
     let foundModule = null;
 
-    // Iterate over each learning record to search both arrays.
+    // Iterate over each learning record and check within each section.
     userLearnings.forEach(learning => {
-      // Check the modules array
-      learning.modules.forEach(mod => {
-        if (mod.module_id && mod.module_id._id.toString() === module_id) {
-          foundModule = {
-            id: mod.module_id._id,
-            name: mod.module_id.name || mod.module_name || "Unknown Module",
-            completed: mod.completed,
-            video: mod.module_id && mod.module_id.video
-              ? {
-                  channelName: mod.module_id.video.channel_name,
-                  publish_date: mod.module_id.video.publish_date,
-                  likes_count: mod.module_id.video.likes_count,
-                  views_count: mod.module_id.video.views_count
-                }
-              : {},
-            aiModuleTitle: mod.ai_module_title || null,
-            relevanceStatement: mod.relevance_statement || null
-          };
-        }
-      });
-
-      // If not found, check the ai_recommendation array.
-      if (!foundModule) {
-        learning.ai_recommendation.forEach(rec => {
-          if (rec.module_id && rec.module_id._id.toString() === module_id) {
-            foundModule = {
-              id: rec.module_id._id,
-              name: rec.module_id.name || rec.module_name || "Unknown Module",
-              completed: rec.completed,
-              video: rec.module_id && rec.module_id.video
-                ? {
-                    channelName: rec.module_id.video.channel_name,
-                    publish_date: rec.module_id.video.publish_date,
-                    likes_count: rec.module_id.video.likes_count,
-                    views_count: rec.module_id.video.views_count
-                  }
-                : {},
-              aiModuleTitle: rec.ai_module_title || null,
-              relevanceStatement: rec.relevance_statement || null
-            };
+      if (learning.sections && Array.isArray(learning.sections)) {
+        learning.sections.forEach(section => {
+          // Check the modules array
+          if (section.modules && Array.isArray(section.modules)) {
+            section.modules.forEach(mod => {
+              if (mod.module_id && mod.module_id._id.toString() === module_id) {
+                foundModule = {
+                  id: mod.module_id._id,
+                  name: mod.module_id.name || mod.module_name || "Unknown Module",
+                  completed: mod.completed,
+                  video: mod.module_id && mod.module_id.video
+                    ? {
+                        channelName: mod.module_id.video.channel_name,
+                        publish_date: mod.module_id.video.publish_date,
+                        likes_count: mod.module_id.video.likes_count,
+                        views_count: mod.module_id.video.views_count
+                      }
+                    : {},
+                  aiModuleTitle: mod.ai_module_title || null,
+                  relevanceStatement: mod.relevance_statement || null
+                };
+              }
+            });
+          }
+          // If not found, check the ai_recommendation array.
+          if (!foundModule && section.ai_recommendation && Array.isArray(section.ai_recommendation)) {
+            section.ai_recommendation.forEach(rec => {
+              if (rec.module_id && rec.module_id._id.toString() === module_id) {
+                foundModule = {
+                  id: rec.module_id._id,
+                  name: rec.module_id.name || rec.module_name || "Unknown Module",
+                  completed: rec.completed,
+                  video: rec.module_id && rec.module_id.video
+                    ? {
+                        channelName: rec.module_id.video.channel_name,
+                        publish_date: rec.module_id.video.publish_date,
+                        likes_count: rec.module_id.video.likes_count,
+                        views_count: rec.module_id.video.views_count
+                      }
+                    : {},
+                  aiModuleTitle: rec.ai_module_title || null,
+                  relevanceStatement: rec.relevance_statement || null
+                };
+              }
+            });
           }
         });
       }
@@ -711,6 +716,8 @@ const getLearningModuleById = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
+
 
 module.exports = {
   addUserLearningByModule,
