@@ -636,6 +636,98 @@ const removeUserLearningModule = async (req, res) => {
   }
 };
 
+const getLearningModuleById = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { module_id } = req.params; // Module ID passed as a route parameter
+
+    if (!module_id) {
+      return res.status(400).json({ message: "Module ID is required" });
+    }
+
+    // Retrieve all UserLearning documents for the user with proper population.
+    const userLearnings = await UserLearning.find({ user_id })
+      .populate({
+        path: "modules.module_id",
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name likes_count views_count publish_date"
+        }
+      })
+      .populate({
+        path: "ai_recommendation.module_id",
+        select: "name video",
+        populate: {
+          path: "video",
+          select: "channel_name likes_count views_count publish_date"
+        }
+      });
+
+    if (!userLearnings || userLearnings.length === 0) {
+      return res.status(404).json({ message: "No learning progress found for this user" });
+    }
+
+    let foundModule = null;
+
+    // Iterate over each learning record to search both arrays.
+    userLearnings.forEach(learning => {
+      // Check the modules array
+      learning.modules.forEach(mod => {
+        if (mod.module_id && mod.module_id._id.toString() === module_id) {
+          foundModule = {
+            id: mod.module_id._id,
+            name: mod.module_id.name || mod.module_name || "Unknown Module",
+            completed: mod.completed,
+            video: mod.module_id && mod.module_id.video
+              ? {
+                  channelName: mod.module_id.video.channel_name,
+                  publish_date: mod.module_id.video.publish_date,
+                  likes_count: mod.module_id.video.likes_count,
+                  views_count: mod.module_id.video.views_count
+                }
+              : {},
+            aiModuleTitle: mod.ai_module_title || null,
+            relevanceStatement: mod.relevance_statement || null
+          };
+        }
+      });
+
+      // If not found, check the ai_recommendation array.
+      if (!foundModule) {
+        learning.ai_recommendation.forEach(rec => {
+          if (rec.module_id && rec.module_id._id.toString() === module_id) {
+            foundModule = {
+              id: rec.module_id._id,
+              name: rec.module_id.name || rec.module_name || "Unknown Module",
+              completed: rec.completed,
+              video: rec.module_id && rec.module_id.video
+                ? {
+                    channelName: rec.module_id.video.channel_name,
+                    publish_date: rec.module_id.video.publish_date,
+                    likes_count: rec.module_id.video.likes_count,
+                    views_count: rec.module_id.video.views_count
+                  }
+                : {},
+              aiModuleTitle: rec.ai_module_title || null,
+              relevanceStatement: rec.relevance_statement || null
+            };
+          }
+        });
+      }
+    });
+
+    if (foundModule) {
+      return res.status(200).json(foundModule);
+    } else {
+      return res.status(404).json({ message: "Module not found in your learning progress" });
+    }
+  } catch (error) {
+    console.error("Error fetching learning module by ID:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
 module.exports = {
   addUserLearningByModule,
   addUserLearningByUniqueModule,
@@ -643,5 +735,6 @@ module.exports = {
   getUserLearningProgress,
   updateUserLearningProgress,
   removeUserLearningModule,
-  getAllLearningModules
+  getAllLearningModules,
+  getLearningModuleById 
 };
