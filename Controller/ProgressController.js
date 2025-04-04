@@ -5,86 +5,187 @@ const Section = require("../Models/Section");
 const Theme = require("../Models/Theme");
 const Badge = require("../Models/Badge");
 const UserProgress = require('../Models/userProgress'); 
-const UserLearning=require("../Models/Learning")
-const Video=require("../Models/Video")
-const Skill=require("../Models/Skill")
+const UserLearning = require("../Models/Learning");
+const Video = require("../Models/Video");
+const Skill = require("../Models/Skill");
 const Onboarding = require("../Models/Onboarding");
 
-
-// Modified awardBadgeOnce to return points if a badge was awarded.
-// const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
-//   const allocatedBadgeIds = progress.badges.map(b => b.toString());
-//   const badge = await Badge.findOne({ name: badgeName });
-//   if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
-//     progress.badges.push(badge._id);
-//     if (targetPointsField && progress[targetPointsField] !== undefined) {
-//       progress[targetPointsField] += badge.points;
-//     }
-//     progress.points += badge.points;
-//     console.log(`Awarded badge "${badgeName}" for ${badge.points} points.`);
-//     return badge.points;
-//   }
-//   return 0;
-// };
-
 const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
-  // Ensure progress.badges is defined; if not, initialize it.
-  if (!progress.badges) {
-    progress.badges = [];
-  }
-
-  // Find the badge in the database
+  const allocatedBadgeIds = progress.badges.map(b => b.badge.toString());
   const badge = await Badge.findOne({ name: badgeName });
-  if (!badge) {
-    console.log(`Badge "${badgeName}" not found in database.`);
-    return 0;
-  }
-
-  // Check if this badge has already been awarded by checking badge names
-  // This is more robust than checking IDs since a badge might have different IDs but same name
-  const badgeAlreadyAwarded = progress.badges.some(b => {
-    if (b.badge) {
-      // If badge is a populated object with a name field
-      if (typeof b.badge === 'object' && b.badge.name) {
-        return b.badge.name === badgeName;
-      }
-      // If badge is a reference that needs to be converted to string for comparison
-      else {
-        return b.badge.toString() === badge._id.toString();
-      }
+  if (badge && !allocatedBadgeIds.includes(badge._id.toString())) {
+    progress.badges.push({ badge: badge._id, awarded_at: new Date() });
+    if (targetPointsField && progress[targetPointsField] !== undefined) {
+      progress[targetPointsField] += badge.points;
     }
-    // If badge is a direct ID reference
-    return b.toString() === badge._id.toString();
-  });
-
-  // If badge already awarded, return 0 points
-  if (badgeAlreadyAwarded) {
-    console.log(`Badge "${badgeName}" already awarded, skipping.`);
-    return 0;
+    progress.points += badge.points;
+    console.log(`Awarded badge "${badgeName}" for ${badge.points} points.`);
+    return badge.points;
   }
-
-  // Award the badge with timestamp
-  progress.badges.push({ badge: badge._id, awarded_at: new Date() });
-  
-  // Add points to the specific target field if provided
-  if (targetPointsField && progress[targetPointsField] !== undefined) {
-    progress[targetPointsField] += badge.points;
-  }
-  
-  // Add points to total
-  progress.points += badge.points;
-  
-  console.log(`Awarded badge "${badgeName}" for ${badge.points} points on ${new Date()}.`);
-  return badge.points;
+  return 0;
 };
 
-
-
-
+// const awardSkillBadges = async (progress) => {
+//   // Ensure skill_points and breakdown exist.
+//   if (typeof progress.skill_points !== 'number') {
+//     progress.skill_points = 0;
+//   }
+//   if (!progress.skill_points_breakdown) {
+//     progress.skill_points_breakdown = {};
+//   }
+  
+//   if (!progress.learnedSkills || progress.learnedSkills.length === 0) {
+//     console.log("No learned skills found in progress.");
+//     return;
+//   }
+  
+//   // Build frequency map from the full learnedSkills array
+//   const skillCountMap = {};
+//   progress.learnedSkills.forEach(id => {
+//     const strId = id.toString();
+//     skillCountMap[strId] = (skillCountMap[strId] || 0) + 1;
+//   });
+//   console.log("Skill count map:", skillCountMap);
+  
+//   // Create a list of unique learned skill IDs (for lookup)
+//   const uniqueLearnedSkillIds = [...new Set(progress.learnedSkills.map(id => id.toString()))];
+  
+//   const fullSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
+//   console.log("Full skills:", fullSkills);
+  
+//   // Loop over each skill and award badges based on thresholds
+//   for (const skill of fullSkills) {
+//     const count = skillCountMap[skill._id.toString()] || 0;
+//     if (!progress.skill_points_breakdown[skill.skill_Name]) {
+//       progress.skill_points_breakdown[skill.skill_Name] = 0;
+//     }
+    
+//     // Define tiers with thresholds
+//     const tiers = [
+//       { tier: "Bronze", threshold: 1 },
+//       { tier: "Silver", threshold: 3 },
+//       { tier: "Gold", threshold: 5 },
+//       { tier: "Platinum", threshold: 10 },
+//     ];
+    
+//     for (const { tier, threshold } of tiers) {
+//       if (count >= threshold) {
+//         const badgeName = `${skill.skill_Name} ${tier}`;
+//         const pointsAwarded = await awardBadgeOnce(progress, badgeName, 'skill_points');
+//         progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
+//         console.log(`Awarded ${badgeName}: +${pointsAwarded} points.`);
+//       }
+//     }
+//   }
+// };
+const awardSkillBadges = async (progress) => {
+  // Ensure skill_points and breakdown exist
+  if (typeof progress.skill_points !== 'number') {
+    progress.skill_points = 0;
+  }
+  if (!progress.skill_points_breakdown) {
+    progress.skill_points_breakdown = {};
+  }
+  
+  if (!progress.learnedSkills || progress.learnedSkills.length === 0) {
+    console.log("No learned skills found in progress.");
+    return;
+  }
+  
+  // Build frequency map from the full learnedSkills array
+  const skillCountMap = {};
+  progress.learnedSkills.forEach(id => {
+    const strId = id.toString();
+    skillCountMap[strId] = (skillCountMap[strId] || 0) + 1;
+  });
+  console.log("Skill count map:", skillCountMap);
+  
+  // Create a list of unique learned skill IDs (for lookup)
+  const uniqueLearnedSkillIds = [...new Set(progress.learnedSkills.map(id => id.toString()))];
+  
+  const fullSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
+  console.log("Full skills:", fullSkills);
+  
+  // Reset skill points breakdown and total
+  progress.skill_points = 0;
+  progress.skill_points_breakdown = {};
+  
+  // Initialize skill_points_breakdown for all skills to 0
+  fullSkills.forEach(skill => {
+    progress.skill_points_breakdown[skill.skill_Name] = 0;
+  });
+  
+  // Define tiers with thresholds
+  const tiers = [
+    { tier: "Bronze", threshold: 1 },
+    { tier: "Silver", threshold: 3 },
+    { tier: "Gold", threshold: 5 },
+    { tier: "Platinum", threshold: 10 }
+  ];
+  
+  // Get all badges already awarded
+  const awardedBadges = progress.badges || [];
+  const awardedBadgeIds = new Set(awardedBadges.map(b => b.badge.toString()));
+  
+  // Create a lookup for badges by name
+  const allTierBadgeNames = [];
+  fullSkills.forEach(skill => {
+    tiers.forEach(tier => {
+      allTierBadgeNames.push(`${skill.skill_Name} ${tier.tier}`);
+    });
+  });
+  
+  const allBadges = await Badge.find({ name: { $in: allTierBadgeNames } });
+  const badgesByName = {};
+  allBadges.forEach(badge => {
+    badgesByName[badge.name] = badge;
+  });
+  
+  // Process each skill
+  for (const skill of fullSkills) {
+    const skillId = skill._id.toString();
+    const count = skillCountMap[skillId] || 0;
+    const skillName = skill.skill_Name;
+    
+    // Each skill occurrence is worth 10 points
+    const pointsPerSkill = 10;
+    const skillPoints = count * pointsPerSkill;
+    
+    // Award badges for each tier threshold that has been met
+    for (const { tier, threshold } of tiers) {
+      if (count >= threshold) {
+        const badgeName = `${skillName} ${tier}`;
+        const badge = badgesByName[badgeName];
+        
+        if (badge) {
+          if (!awardedBadgeIds.has(badge._id.toString())) {
+            // Award new badge
+            progress.badges.push({ badge: badge._id, awarded_at: new Date() });
+            awardedBadgeIds.add(badge._id.toString());
+            
+            // Display message for the badge award
+            // These messages are just for logging and don't affect the points
+            if (tier === "Silver") {
+              console.log(`Awarded ${badgeName}: +20 points.`);
+            } else {
+              console.log(`Awarded ${badgeName}: +0 additional points.`);
+            }
+          }
+        }
+      }
+    }
+    
+    // Update the skill points in the breakdown
+    progress.skill_points_breakdown[skillName] = skillPoints;
+    progress.skill_points += skillPoints;
+  }
+  
+  console.log("Updated skill points breakdown:", progress.skill_points_breakdown);
+  console.log("Total skill points:", progress.skill_points);
+};
 const updateStreaks = async (progress) => {
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
-
 
   // Ensure streak counters are initialized.
   progress.dailyStreak = progress.dailyStreak || 0;
@@ -113,7 +214,6 @@ const updateStreaks = async (progress) => {
   }
   progress.consecutiveModules += 1;
   progress.lastCompletionDate = now;
-
 
   // Update the maximum daily streak if needed.
   if (progress.dailyStreak > progress.maxDailyStreak) {
@@ -162,122 +262,6 @@ const allocateModuleMilestoneBadges = async (progress) => {
   }
 };
 
-
-const awardSkillBadges = async (progress, newSkillIds = []) => {
-  // Ensure progress.skill_points and breakdown exist
-  if (typeof progress.skill_points !== 'number') {
-    progress.skill_points = 0;
-  }
-  if (!progress.skill_points_breakdown || typeof progress.skill_points_breakdown !== 'object') {
-    progress.skill_points_breakdown = {};
-  }
-
-  // ------------------------------------------
-  // 1. Award Base Points for New Occurrences
-  // ------------------------------------------
-  // newSkillIds is expected to include duplicates if the same skill is earned multiple times.
-  const moduleSkillIds = newSkillIds.map(id => id.toString());
-  // Fetch full skill documents for these IDs (we need skill_Name)
-  const newFullSkills = await Skill.find({ _id: { $in: moduleSkillIds } });
-  const newSkillMap = {};
-  newFullSkills.forEach(skill => {
-    newSkillMap[skill._id.toString()] = skill;
-  });
-  // Build counts for this module (new occurrences)
-  const moduleSkillCounts = {};
-  for (const skillId of moduleSkillIds) {
-    const skill = newSkillMap[skillId];
-    if (skill && skill.skill_Name) {
-      moduleSkillCounts[skill.skill_Name] = (moduleSkillCounts[skill.skill_Name] || 0) + 1;
-    }
-  }
-  
-  // Make a copy of the current breakdown
-  const updatedBreakdown = { ...progress.skill_points_breakdown };
-
-  // For each skill in this module, add base points (10 per occurrence)
-  for (const [skillName, count] of Object.entries(moduleSkillCounts)) {
-    updatedBreakdown[skillName] = (updatedBreakdown[skillName] || 0) + (count * 10);
-    console.log(`Added ${count * 10} base points for skill: ${skillName}. New total: ${updatedBreakdown[skillName]}`);
-  }
-
-  // ------------------------------------------
-  // 2. Compute Cumulative Skill Counts (INCLUDING duplicates)
-  // ------------------------------------------
-  // progress.learnedSkills should contain duplicates.
-  const learnedSkillIds = progress.learnedSkills.map(id => id.toString());
-  // We use Promise.all with Skill.findById to get every document—even if an ID appears multiple times.
-  const allSkillDocs = await Promise.all(learnedSkillIds.map(id => Skill.findById(id)));
-  const cumulativeCounts = {};
-  allSkillDocs.forEach(doc => {
-    if (doc && doc.skill_Name) {
-      cumulativeCounts[doc.skill_Name] = (cumulativeCounts[doc.skill_Name] || 0) + 1;
-    }
-  });
-  console.log("Cumulative counts:", cumulativeCounts);
-  
-  // ------------------------------------------
-  // 3. Award Higher Tier Badges When a Threshold Is Crossed
-  // ------------------------------------------
-  // Define badge tiers (e.g., Silver: threshold 3, Gold: threshold 5, Platinum: threshold 10)
-  const badgeTiers = [
-    { name: "Silver", threshold: 3, points: 20 },
-    { name: "Gold", threshold: 5, points: 30 },
-    { name: "Platinum", threshold: 10, points: 50 }
-  ];
-
-  // For each skill in the current module, compute:
-  //   previousCount = cumulative count BEFORE adding this module's occurrences
-  //   currentCumCount = cumulative count AFTER adding them.
-  for (const skillName of Object.keys(moduleSkillCounts)) {
-    const newCount = moduleSkillCounts[skillName]; // Occurrences in this module
-    const currentCumCount = cumulativeCounts[skillName] || newCount; // Total occurrences now
-    const previousCount = currentCumCount - newCount; // Occurrences before this module
-    console.log(`For skill "${skillName}": previous cumulative count: ${previousCount}, current cumulative count: ${currentCumCount}`);
-    
-    // For each tier, if the threshold is crossed in this iteration, award the badge.
-    for (const tier of badgeTiers) {
-      if (previousCount < tier.threshold && currentCumCount >= tier.threshold) {
-        const badgeName = `${skillName} ${tier.name}`;
-        const pointsAwarded = await awardBadgeOnce(progress, badgeName, 'skill_points');
-        if (pointsAwarded > 0) {
-          updatedBreakdown[skillName] += pointsAwarded;
-          console.log(`Awarded badge ${badgeName}: +${pointsAwarded} points. New total for ${skillName}: ${updatedBreakdown[skillName]}`);
-        } else {
-          console.log(`Badge ${badgeName} already awarded, no new points.`);
-        }
-      }
-    }
-  }
-
-  // ------------------------------------------
-  // 4. Ensure Bronze Badge Is Awarded for Each Skill in Module
-  // ------------------------------------------
-  for (const skillName of Object.keys(moduleSkillCounts)) {
-    const badgeName = `${skillName} Bronze`;
-    await awardBadgeOnce(progress, badgeName, null);
-  }
-
-  // ------------------------------------------
-  // 5. Update and Save the Breakdown and Total Skill Points
-  // ------------------------------------------
-  progress.skill_points_breakdown = updatedBreakdown;
-  progress.markModified('skill_points_breakdown');
-  progress.skill_points = Object.values(updatedBreakdown)
-    .reduce((total, pts) => total + (typeof pts === 'number' ? pts : 0), 0);
-
-  console.log("Updated skill points breakdown:", progress.skill_points_breakdown);
-  console.log("Total skill points:", progress.skill_points);
-};
-
-
-
-
-
-
-
-
-
 const completeModule = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -287,27 +271,63 @@ const completeModule = async (req, res) => {
       return res.status(400).json({ message: "Quiz score too low to mark module as completed." });
     }
   
+    // Find the module and populate its section details
     const moduleDoc = await Module.findById(module_id).populate("section_id");
     if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found" });
     }
-    if (!moduleDoc.section_id) {
-      return res.status(404).json({ message: "Section not found for this module" });
-    }
   
     const sectionId = moduleDoc.section_id._id;
-    const themeId = moduleDoc.section_id.theme_id; 
+    const themeId = moduleDoc.section_id.theme_id;
   
     const user = await User.findById(userId).populate({
       path: "userProgress",
-      populate: { path: "badges.badge", select: "name description type tagline points criteria hidden" },
+      populate: { path: "badges", select: "name description type tagline points criteria hidden" },
     });
     if (!user || !user.userProgress) {
       return res.status(500).json({ message: "User progress document not found." });
     }
   
+    // Retrieve the entire UserLearning document for the user
+    let userLearning = await UserLearning.findOne({ user_id: userId });
+    if (!userLearning) {
+      return res.status(404).json({ message: "User learning record not found." });
+    }
+  
+    // Loop over all sections to find and update the module (in both arrays)
+    let moduleFound = false;
+    for (let section of userLearning.sections) {
+      // Update in the modules array
+      let mod = section.modules.find(mod => mod.module_id.toString() === module_id);
+      if (mod) {
+        mod.completed = true;
+        mod.status = true; // per new schema
+        mod.video_progress = 100;
+        moduleFound = true;
+      }
+      // Update in the ai_recommendation array
+      section.ai_recommendation.forEach((mod, index) => {
+        if (mod.module_id.toString() === module_id) {
+          mod.completed = true;
+          mod.status = true;
+          mod.video_progress = 100;
+          if (!mod.order) {
+            mod.order = index + 1;
+          }
+          moduleFound = true;
+        }
+      });
+    }
+  
+    if (!moduleFound) {
+      return res.status(404).json({ message: "Module not found in user learning record." });
+    }
+  
+    // Mark the sections as modified so Mongoose saves the changes
+    userLearning.markModified("sections");
+  
+    // --- Update progress document ---
     const progress = user.userProgress;
-    // Initialize progress fields if needed.
     progress.completed_modules = progress.completed_modules || [];
     progress.section_progress = progress.section_progress || [];
     progress.theme_progress = progress.theme_progress || [];
@@ -326,7 +346,6 @@ const completeModule = async (req, res) => {
       return res.status(400).json({ message: "Module already completed" });
     }
   
-    // Award the "Completing Module" badge.
     const moduleBadge = await Badge.findOne({ name: "Completing Module" });
     let modulePointsEarned = 0;
     if (moduleBadge) {
@@ -334,121 +353,23 @@ const completeModule = async (req, res) => {
       progress.module_points += moduleBadge.points;
       progress.points += moduleBadge.points;
       progress.badges.push({ badge: moduleBadge._id, awarded_at: new Date() });
-      console.log(`Awarded badge "Completing Module" for ${moduleBadge.points} points.`);
     }
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
-// --- Update the UserLearning document (consolidated schema) ---
-let userLearning = await UserLearning.findOne({ user_id: userId });
-if (!userLearning) {
-  return res.status(404).json({ message: "User learning record not found." });
-}
-
-// Keep track if we found and updated the module
-let moduleUpdated = false;
-console.log("Attempting to mark module as completed:", module_id);
-
-// Helper function to mark module as completed and track whether it was found
-const markModuleCompleted = (section, sectionName) => {
-  if (section && section.modules && Array.isArray(section.modules)) {
-    for (const mod of section.modules) {
-      if ((mod.module_id && mod.module_id.toString() === module_id) || 
-          (mod.id && mod.id.toString() === module_id)) {
-        mod.completed = true;
-        if (typeof mod.video_progress !== 'undefined') {
-          mod.video_progress = 100;
-        }
-        moduleUpdated = true;
-        console.log(`Module marked completed in ${sectionName}`);
-        return true;
-      }
-    }
-  }
-  return false;
-};
-
-// Check in aiRecommendations
-if (userLearning.aiRecommendations && Array.isArray(userLearning.aiRecommendations)) {
-  for (const section of userLearning.aiRecommendations) {
-    if (markModuleCompleted(section, `aiRecommendations section: ${section.name || 'unnamed'}`)) {
-      break;
-    }
-  }
-  userLearning.markModified("aiRecommendations");
-}
-
-// Check in userPreferenceModules if still not found
-if (!moduleUpdated && userLearning.userPreferenceModules && Array.isArray(userLearning.userPreferenceModules)) {
-  for (const section of userLearning.userPreferenceModules) {
-    if (markModuleCompleted(section, `userPreferenceModules section: ${section.name || 'unnamed'}`)) {
-      break;
-    }
-  }
-  userLearning.markModified("userPreferenceModules");
-}
-
-// Legacy structure: Check in sections if still not found
-if (!moduleUpdated && userLearning.sections && Array.isArray(userLearning.sections)) {
-  for (const section of userLearning.sections) {
-    // Check in regular modules array
-    if (section.modules && Array.isArray(section.modules)) {
-      for (const mod of section.modules) {
-        if ((mod.module_id && mod.module_id.toString() === module_id) || 
-            (mod.id && mod.id.toString() === module_id)) {
-          mod.completed = true;
-          if (typeof mod.video_progress !== 'undefined') {
-            mod.video_progress = 100;
-          }
-          moduleUpdated = true;
-          console.log(`Module marked completed in legacy section.modules`);
-          break;
-        }
-      }
-    }
-    
-    // Check in ai_recommendation array if present
-    if (!moduleUpdated && section.ai_recommendation && Array.isArray(section.ai_recommendation)) {
-      for (const mod of section.ai_recommendation) {
-        if ((mod.module_id && mod.module_id.toString() === module_id) || 
-            (mod.id && mod.id.toString() === module_id)) {
-          mod.completed = true;
-          if (typeof mod.video_progress !== 'undefined') {
-            mod.video_progress = 100;
-          }
-          moduleUpdated = true;
-          console.log(`Module marked completed in legacy section.ai_recommendation`);
-          break;
-        }
-      }
-    }
-    
-    if (moduleUpdated) break;
-  }
-  userLearning.markModified("sections");
-}
-
-if (!moduleUpdated) {
-  console.log(`Warning: Module ${module_id} not found in any section of UserLearning document.`);
-  console.log("UserLearning structure summary:");
-  if (userLearning.aiRecommendations) console.log(`- aiRecommendations: ${userLearning.aiRecommendations.length} sections`);
-  if (userLearning.userPreferenceModules) console.log(`- userPreferenceModules: ${userLearning.userPreferenceModules.length} sections`);
-  if (userLearning.sections) console.log(`- sections: ${userLearning.sections.length} sections`);
-} else {
-  console.log(`Successfully marked module ${module_id} as completed`);
-}
-  
-    // Update streaks and other progress metrics.
+    // --- Update streaks ---
     await updateStreaks(progress);
   
-    // Calculate section completion percentage.
+    // --- Update section progress ---
     const modulesInSection = await Module.find({ section_id: sectionId }, "_id");
     const completedInSectionCount = progress.completed_modules.filter(m =>
       modulesInSection.some(mod => mod._id.toString() === m.module_id.toString())
     ).length;
-    const sectionCompletionPercentage = Math.round((completedInSectionCount / modulesInSection.length) * 100);
+    const sectionCompletionPercentage = Math.round(
+      (completedInSectionCount / modulesInSection.length) * 100
+    );
   
-    let sectionProgress = progress.section_progress.find(sp =>
-      sp.section_id.toString() === sectionId.toString()
+    let sectionProgress = progress.section_progress.find(
+      sp => sp.section_id.toString() === sectionId.toString()
     );
     let sectionJustCompleted = false;
     if (!sectionProgress) {
@@ -464,7 +385,8 @@ if (!moduleUpdated) {
       }
       progress.section_progress.push(sectionProgress);
     } else {
-      sectionProgress.status = completedInSectionCount === modulesInSection.length ? "completed" : "in_progress";
+      sectionProgress.status =
+        completedInSectionCount === modulesInSection.length ? "completed" : "in_progress";
       sectionProgress.completion_percentage = sectionCompletionPercentage;
       if (completedInSectionCount === modulesInSection.length && !sectionProgress.completed_at) {
         sectionProgress.completed_at = new Date();
@@ -481,6 +403,7 @@ if (!moduleUpdated) {
       });
     }
   
+    // --- Update theme progress ---
     let themeJustCompleted = false;
     if (themeId) {
       const sectionsInTheme = await Section.find({ theme_id: themeId }, "_id");
@@ -488,10 +411,12 @@ if (!moduleUpdated) {
       const completedSectionsCount = progress.section_progress.filter(sp =>
         sectionsInTheme.some(sec => sec._id.toString() === sp.section_id.toString() && sp.status === "completed")
       ).length;
-      const themeCompletionPercentage = Math.round((completedSectionsCount / totalSections) * 100);
+      const themeCompletionPercentage = Math.round(
+        (completedSectionsCount / totalSections) * 100
+      );
   
-      let themeProgress = progress.theme_progress.find(tp =>
-        tp.theme_id.toString() === themeId.toString()
+      let themeProgress = progress.theme_progress.find(
+        tp => tp.theme_id.toString() === themeId.toString()
       );
       if (!themeProgress) {
         themeProgress = {
@@ -506,7 +431,8 @@ if (!moduleUpdated) {
         }
         progress.theme_progress.push(themeProgress);
       } else {
-        themeProgress.status = completedSectionsCount === totalSections ? "completed" : "in_progress";
+        themeProgress.status =
+          completedSectionsCount === totalSections ? "completed" : "in_progress";
         themeProgress.completion_percentage = themeCompletionPercentage;
         if (completedSectionsCount === totalSections && !themeProgress.completed_at) {
           themeProgress.completed_at = new Date();
@@ -526,53 +452,36 @@ if (!moduleUpdated) {
     await allocateMasterBadge(progress, quizScore);
     await allocateModuleMilestoneBadges(progress);
   
-    // Fetch videos in the module and extract learned skills
-    const videosInModulePopulated = await Video.find({ module_id: module_id }).populate({
+    // --- Process learned skills and award skill badges ---
+    const videosInModulePopulated = await Video.find({ module_id }).populate({
       path: "learnedSkills",
       select: "uniqueSkill_id skill_theme skill_Name skill_description"
     });
     console.log("Videos in module:", videosInModulePopulated);
   
-    // Extract skills from module videos (allow duplicates so the count accumulates)
-    const moduleLearnedSkills = [];
+    let moduleLearnedSkills = [];
     videosInModulePopulated.forEach(video => {
       if (video.learnedSkills && video.learnedSkills.length > 0) {
-        video.learnedSkills.forEach(skill => {
-          const skillId = skill._id ? skill._id : skill;
-          // Use skill.occurrences if available, default to 1 occurrence otherwise.
-          const occurrences = skill.occurrences || 1;
-          for (let i = 0; i < occurrences; i++) {
-            moduleLearnedSkills.push(skillId);
-          }
-        });
+        moduleLearnedSkills = moduleLearnedSkills.concat(video.learnedSkills);
       }
     });
+    console.log("Module learned skills:", moduleLearnedSkills);
   
-    // Ensure learnedSkills array exists
+    // Append new learned skills to progress.learnedSkills (do not deduplicate here to preserve counts)
     if (!progress.learnedSkills) {
       progress.learnedSkills = [];
     }
+    moduleLearnedSkills.forEach(skill => {
+      const skillId = skill._id ? skill._id : skill;
+      progress.learnedSkills.push(skillId);
+    });
+    console.log("After updating learnedSkills:", progress.learnedSkills);
   
-    // Accumulate all learned skills from this module (do not filter out duplicates)
-    progress.learnedSkills.push(...moduleLearnedSkills);
-    console.log("Accumulated learned skills after module:", progress.learnedSkills);
+    await awardSkillBadges(progress);
   
-    // Award skill badges using the new occurrences from this module
-    await awardSkillBadges(progress, moduleLearnedSkills);
-    
-    // ========== ADDED CODE FOR FIXING SKILL POINTS BREAKDOWN ==========
-    console.log("Before saving - Skill points breakdown:", progress.skill_points_breakdown);
-    if (!progress.skill_points_breakdown) {
-      progress.skill_points_breakdown = {};
-    }
-    const breakdownCopy = JSON.parse(JSON.stringify(progress.skill_points_breakdown));
-    progress.skill_points_breakdown = breakdownCopy;
-    progress.markModified('skill_points_breakdown');
-    // ===============================================================
-  
+    // --- Update points ---
     const pointsEarned = progress.points - pointsBefore;
   
-    // Update daily/weekly/monthly points tracking
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
   
@@ -609,60 +518,48 @@ if (!moduleUpdated) {
       progress.monthly_points.push({ month: monthLabel, points: pointsEarned });
     }
   
-    // Save progress document
     await progress.save();
     await userLearning.save();
-    
-    // ========== ADDED CODE: REFRESH FROM DATABASE ==========
-    const updatedProgress = await UserProgress.findById(progress._id);
-    const responseSkillPointsBreakdown = updatedProgress.skill_points_breakdown || {};
-    // ======================================================
   
-    // Prepare the response with deduplicated badges
-    const allBadges = await Badge.find(
-      { _id: { $in: updatedProgress.badges.map(b => b.badge ? b.badge : b) } },
+    // --- Get badges for the response ---
+    const fullBadges = await Badge.find(
+      { _id: { $in: progress.badges.map(b => b.badge) } },
       "name description type tagline points criteria hidden"
     );
-    const uniqueBadges = {};
-    const responseBadges = [];
   
-    allBadges.forEach(badge => {
-      if (!uniqueBadges[badge.name]) {
-        uniqueBadges[badge.name] = true;
-        responseBadges.push(badge);
-      }
-    });
-    
-    const totalBadgePoints = responseBadges.reduce((acc, badge) => acc + badge.points, 0);
-    const uniqueLearnedSkillIds = [...new Set(updatedProgress.learnedSkills.map(id => id.toString()))];
-    const fullLearnedSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
-    
+    const countCompletedModules = progress.completed_modules.length;
+    const countCompletedSections = progress.section_progress.filter(sp => sp.status === "completed").length;
+    const countCompletedThemes = progress.theme_progress.filter(tp => tp.status === "completed").length;
+  
     res.status(200).json({
       message: "Module completed",
       progress: {
-        completed_modules: updatedProgress.completed_modules,
-        total_modules_completed: updatedProgress.completed_modules.length,
-        module_points: updatedProgress.module_points,
-        section_progress: updatedProgress.section_progress,
-        total_sections_completed: updatedProgress.section_progress.filter(sp => sp.status === "completed").length,
-        section_points: updatedProgress.section_points,
-        theme_progress: updatedProgress.theme_progress,
-        total_themes_completed: updatedProgress.theme_progress.filter(tp => tp.status === "completed").length,
-        theme_points: updatedProgress.theme_points,
-        total_points: updatedProgress.points,
-        daily_points: updatedProgress.daily_points,
-        weekly_points: updatedProgress.weekly_points,
-        monthly_points: updatedProgress.monthly_points,
-        badges: responseBadges,
-        total_badge_points: totalBadgePoints,
-        dailyStreak: updatedProgress.dailyStreak,
-        maxDailyStreak: updatedProgress.maxDailyStreak, 
-        weeklyStreak: updatedProgress.weeklyStreak,
-        maxWeeklyStreak: updatedProgress.maxWeeklyStreak,
-        consecutiveModules: updatedProgress.consecutiveModules,
-        learnedSkills: fullLearnedSkills,
-        skill_points_breakdown: responseSkillPointsBreakdown,
-        total_skill_points: updatedProgress.skill_points
+        completed_modules: progress.completed_modules,
+        total_modules_completed: countCompletedModules,
+        module_points: progress.module_points,
+        section_progress: progress.section_progress,
+        total_sections_completed: countCompletedSections,
+        section_points: progress.section_points,
+        theme_progress: progress.theme_progress,
+        total_themes_completed: countCompletedThemes,
+        theme_points: progress.theme_points,
+        total_points: progress.points,
+        daily_points: progress.daily_points,
+        weekly_points: progress.weekly_points,
+        monthly_points: progress.monthly_points,
+        badges: fullBadges.map(badgeDoc => ({
+          ...badgeDoc.toObject(),
+          awarded_at: progress.badges.find(b => b.badge.toString() === badgeDoc._id.toString()).awarded_at
+        })),
+        total_badge_points: fullBadges.reduce((acc, badge) => acc + badge.points, 0),
+        dailyStreak: progress.dailyStreak,
+        maxDailyStreak: progress.maxDailyStreak,
+        weeklyStreak: progress.weeklyStreak,
+        maxWeeklyStreak: progress.maxWeeklyStreak,
+        consecutiveModules: progress.consecutiveModules,
+        learnedSkills: progress.learnedSkills,
+        skill_points_breakdown: progress.skill_points_breakdown,
+        total_skill_points: progress.skill_points
       },
     });
   } catch (error) {
@@ -670,7 +567,6 @@ if (!moduleUpdated) {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 
 const getSkillChartData = async (req, res) => {
@@ -696,106 +592,52 @@ const getSkillChartData = async (req, res) => {
 const getUserProgress = async (req, res) => {
   try {
     const userId = req.user._id;
+    
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid user id provided." });
     }
-
-    // Important: DO NOT populate learnedSkills directly as it causes deduplication
+    
+    // First, get the progress with populated badges
     const progress = await UserProgress.findOne({ user_id: userId })
       .populate({
         path: "badges.badge",
-        select: "name type description tagline points criteria hidden",
+        select: "name type description tagline points criteria hidden"
+      })
+      .populate({
+        path: "learnedSkills"
       });
-
+    
     if (!progress) {
       return res.status(404).json({ message: "User progress not found." });
     }
-
-    // Deduplicate badges (we still want each badge only once)
-    const uniqueBadges = {};
-    const badgesArray = [];
-    if (progress.badges && progress.badges.length > 0) {
-      progress.badges.forEach(badgeItem => {
-        if (badgeItem.badge) {
-          const badgeName = badgeItem.badge.name;
-          if (!uniqueBadges[badgeName]) {
-            uniqueBadges[badgeName] = true;
-            badgesArray.push({
-              _id: badgeItem.badge._id,
-              name: badgeItem.badge.name,
-              type: badgeItem.badge.type,
-              description: badgeItem.badge.description,
-              tagline: badgeItem.badge.tagline,
-              points: badgeItem.badge.points,
-              criteria: badgeItem.badge.criteria,
-              hidden: badgeItem.badge.hidden,
-              awarded_at: badgeItem.awarded_at
-            });
-          }
-        }
-      });
-    }
-
-    // For learnedSkills, we need to fetch the full details manually to maintain duplicates
-    const skillsArray = [];
-    if (progress.learnedSkills && progress.learnedSkills.length > 0) {
-      // Get all unique skill IDs for fetching skill details
-      const uniqueSkillIds = [...new Set(progress.learnedSkills.map(id => id.toString()))];
-      
-      // Fetch all skill details in one go
-      const skillDetails = await Skill.find(
-        { _id: { $in: uniqueSkillIds } },
-        "_id skill_section skill_Name skill_description"
-      );
-      
-      // Create a map for quick lookup
-      const skillMap = {};
-      skillDetails.forEach(skill => {
-        skillMap[skill._id.toString()] = skill;
-      });
-      
-      // Reconstruct the original array with duplicates, but with full details
-      for (const skillId of progress.learnedSkills) {
-        const id = skillId.toString();
-        if (skillMap[id]) {
-          skillsArray.push(skillMap[id]);
-        }
-      }
-    }
-
-    // Create a cleaned version of the progress object
-    const cleanedProgress = {
-      ...progress.toObject(),
-      badges: badgesArray,
-      learnedSkills: skillsArray,
-      // Add a count of skills (including duplicates)
-      skillsCount: progress.learnedSkills ? progress.learnedSkills.length : 0
-    };
-
-    // For debugging: add a count of unique skills to compare
-    const uniqueSkillsCount = progress.learnedSkills ? 
-      new Set(progress.learnedSkills.map(id => id.toString())).size : 0;
     
-    cleanedProgress.uniqueSkillsCount = uniqueSkillsCount;
-
-    res.status(200).json({ 
-      progress: cleanedProgress,
-      // For debugging:
-      debug: {
-        totalSkills: progress.learnedSkills ? progress.learnedSkills.length : 0,
-        uniqueSkills: uniqueSkillsCount
-      }
+    // Convert to plain object so we can modify it
+    const progressObj = progress.toObject();
+    
+    // Transform badges from nested format to flattened format
+    const flattenedBadges = progressObj.badges.map(badge => ({
+      _id: badge.badge._id,
+      name: badge.badge.name,
+      type: badge.badge.type,
+      description: badge.badge.description,
+      tagline: badge.badge.tagline,
+      points: badge.badge.points,
+      criteria: badge.badge.criteria,
+      hidden: badge.badge.hidden,
+      awarded_at: badge.awarded_at
+    }));
+    
+    // Replace the nested badges with the flattened format
+    progressObj.badges = flattenedBadges;
+    
+    res.status(200).json({
+      progress: progressObj
     });
   } catch (error) {
     console.error("Error fetching user progress:", error);
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
-  
-  
 
 const getModuleProgress = async (req, res) => {
   try {
@@ -861,10 +703,10 @@ const getThemeProgress = async (req, res) => {
 const getUserWeeklyTotalPoints = async (req, res) => {
   try {
     const userId = req.user._id;
-        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid user ID provided." });
     }
-        const progress = await UserProgress.findOne({ user_id: userId });
+    const progress = await UserProgress.findOne({ user_id: userId });
     if (!progress) {
       return res.status(404).json({ message: "User progress not found." });
     }
@@ -890,8 +732,6 @@ const getUserWeeklyTotalPoints = async (req, res) => {
   }
 };
 
-
-
 const getUserDailyPointsHeat = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -899,7 +739,7 @@ const getUserDailyPointsHeat = async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid user ID provided." });
     }
-        const progress = await UserProgress.findOne({ user_id: userId });
+    const progress = await UserProgress.findOne({ user_id: userId });
     if (!progress) {
       return res.status(404).json({ message: "User progress not found." });
     }
@@ -917,7 +757,6 @@ const getUserDailyPointsHeat = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
 
 const userRanking = async (req, res) => {
   try {
@@ -990,7 +829,7 @@ const userIndividualRanking = async (req, res) => {
     let lastPoints = null;
     let lastOrdinalRank = 0;
     let lastPercentile = 0;
-        for (let i = 0; i < totalUsers; i++) {
+    for (let i = 0; i < totalUsers; i++) {
       const current = progressList[i];
       let ordinalRank, percentile;
   
@@ -1019,7 +858,7 @@ const userIndividualRanking = async (req, res) => {
       lastOrdinalRank = ordinalRank;
       lastPercentile = percentile;
     }
-        const userRankData = rankedList.find(
+    const userRankData = rankedList.find(
       (item) => item.user_id.toString() === user_id.toString()
     );
     
@@ -1218,11 +1057,6 @@ const userCompleteRanking = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
-
-
-
-
-
 
 module.exports = {
   completeModule,
