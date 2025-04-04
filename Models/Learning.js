@@ -45,8 +45,7 @@ const SectionLearningSchema = new Schema({
   },
   modules: [ModuleLearningSchema],         
   ai_recommendation: [ModuleLearningSchema], 
-}, { _id: false }); 
-
+},); 
 // Consolidated UserLearning schema for a single user
 const UserLearningSchema = new Schema(
   {
