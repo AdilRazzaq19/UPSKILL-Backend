@@ -338,40 +338,104 @@ const completeModule = async (req, res) => {
     }
     progress.completed_modules.push({ module_id, completed_at: new Date(), points_earned: modulePointsEarned });
   
-    // --- Update the UserLearning document (consolidated schema) ---
-    let userLearning = await UserLearning.findOne({ user_id: userId });
-    if (!userLearning) {
-      return res.status(404).json({ message: "User learning record not found." });
+// --- Update the UserLearning document (consolidated schema) ---
+let userLearning = await UserLearning.findOne({ user_id: userId });
+if (!userLearning) {
+  return res.status(404).json({ message: "User learning record not found." });
+}
+
+// Keep track if we found and updated the module
+let moduleUpdated = false;
+console.log("Attempting to mark module as completed:", module_id);
+
+// Helper function to mark module as completed and track whether it was found
+const markModuleCompleted = (section, sectionName) => {
+  if (section && section.modules && Array.isArray(section.modules)) {
+    for (const mod of section.modules) {
+      if ((mod.module_id && mod.module_id.toString() === module_id) || 
+          (mod.id && mod.id.toString() === module_id)) {
+        mod.completed = true;
+        if (typeof mod.video_progress !== 'undefined') {
+          mod.video_progress = 100;
+        }
+        moduleUpdated = true;
+        console.log(`Module marked completed in ${sectionName}`);
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+// Check in aiRecommendations
+if (userLearning.aiRecommendations && Array.isArray(userLearning.aiRecommendations)) {
+  for (const section of userLearning.aiRecommendations) {
+    if (markModuleCompleted(section, `aiRecommendations section: ${section.name || 'unnamed'}`)) {
+      break;
+    }
+  }
+  userLearning.markModified("aiRecommendations");
+}
+
+// Check in userPreferenceModules if still not found
+if (!moduleUpdated && userLearning.userPreferenceModules && Array.isArray(userLearning.userPreferenceModules)) {
+  for (const section of userLearning.userPreferenceModules) {
+    if (markModuleCompleted(section, `userPreferenceModules section: ${section.name || 'unnamed'}`)) {
+      break;
+    }
+  }
+  userLearning.markModified("userPreferenceModules");
+}
+
+// Legacy structure: Check in sections if still not found
+if (!moduleUpdated && userLearning.sections && Array.isArray(userLearning.sections)) {
+  for (const section of userLearning.sections) {
+    // Check in regular modules array
+    if (section.modules && Array.isArray(section.modules)) {
+      for (const mod of section.modules) {
+        if ((mod.module_id && mod.module_id.toString() === module_id) || 
+            (mod.id && mod.id.toString() === module_id)) {
+          mod.completed = true;
+          if (typeof mod.video_progress !== 'undefined') {
+            mod.video_progress = 100;
+          }
+          moduleUpdated = true;
+          console.log(`Module marked completed in legacy section.modules`);
+          break;
+        }
+      }
     }
     
-    // Mark module as completed in all sections/arrays where it might appear.
-    const markModuleCompleted = (arr) => {
-      if (arr && Array.isArray(arr)) {
-        arr.forEach(section => {
-          if (section.modules && Array.isArray(section.modules)) {
-            section.modules.forEach(mod => {
-              if ((mod.module_id && mod.module_id.toString() === module_id) || (mod.id && mod.id.toString() === module_id)) {
-                mod.completed = true;
-                if (typeof mod.video_progress !== "undefined") {
-                  mod.video_progress = 100;
-                }
-              }
-            });
+    // Check in ai_recommendation array if present
+    if (!moduleUpdated && section.ai_recommendation && Array.isArray(section.ai_recommendation)) {
+      for (const mod of section.ai_recommendation) {
+        if ((mod.module_id && mod.module_id.toString() === module_id) || 
+            (mod.id && mod.id.toString() === module_id)) {
+          mod.completed = true;
+          if (typeof mod.video_progress !== 'undefined') {
+            mod.video_progress = 100;
           }
-        });
+          moduleUpdated = true;
+          console.log(`Module marked completed in legacy section.ai_recommendation`);
+          break;
+        }
       }
-    };
+    }
+    
+    if (moduleUpdated) break;
+  }
+  userLearning.markModified("sections");
+}
 
-    // Check all arrays in userLearning.
-    markModuleCompleted(userLearning.aiRecommendations);
-    markModuleCompleted(userLearning.userPreferenceModules);
-    markModuleCompleted(userLearning.sections);
-    // Mark as modified after updating.
-    userLearning.markModified("aiRecommendations");
-    userLearning.markModified("userPreferenceModules");
-    userLearning.markModified("sections");
-  
-    console.log(`Module ${module_id} marked as completed in user learning.`);
+if (!moduleUpdated) {
+  console.log(`Warning: Module ${module_id} not found in any section of UserLearning document.`);
+  console.log("UserLearning structure summary:");
+  if (userLearning.aiRecommendations) console.log(`- aiRecommendations: ${userLearning.aiRecommendations.length} sections`);
+  if (userLearning.userPreferenceModules) console.log(`- userPreferenceModules: ${userLearning.userPreferenceModules.length} sections`);
+  if (userLearning.sections) console.log(`- sections: ${userLearning.sections.length} sections`);
+} else {
+  console.log(`Successfully marked module ${module_id} as completed`);
+}
   
     // Update streaks and other progress metrics.
     await updateStreaks(progress);
