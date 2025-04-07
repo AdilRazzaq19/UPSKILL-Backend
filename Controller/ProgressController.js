@@ -25,8 +25,9 @@ const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
   return 0;
 };
 
+
 // const awardSkillBadges = async (progress) => {
-//   // Ensure skill_points and breakdown exist.
+//   // Ensure skill_points and breakdown exist
 //   if (typeof progress.skill_points !== 'number') {
 //     progress.skill_points = 0;
 //   }
@@ -53,31 +54,84 @@ const awardBadgeOnce = async (progress, badgeName, targetPointsField) => {
 //   const fullSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
 //   console.log("Full skills:", fullSkills);
   
-//   // Loop over each skill and award badges based on thresholds
+//   // Reset skill points breakdown and total
+//   progress.skill_points = 0;
+//   progress.skill_points_breakdown = {};
+  
+//   // Initialize skill_points_breakdown for all skills to 0
+//   fullSkills.forEach(skill => {
+//     progress.skill_points_breakdown[skill.skill_Name] = 0;
+//   });
+  
+//   // Define tiers with thresholds
+//   const tiers = [
+//     { tier: "Bronze", threshold: 1 },
+//     { tier: "Silver", threshold: 3 },
+//     { tier: "Gold", threshold: 5 },
+//     { tier: "Platinum", threshold: 10 }
+//   ];
+  
+//   // Get all badges already awarded
+//   const awardedBadges = progress.badges || [];
+//   const awardedBadgeIds = new Set(awardedBadges.map(b => b.badge.toString()));
+  
+//   // Create a lookup for badges by name
+//   const allTierBadgeNames = [];
+//   fullSkills.forEach(skill => {
+//     tiers.forEach(tier => {
+//       allTierBadgeNames.push(`${skill.skill_Name} ${tier.tier}`);
+//     });
+//   });
+  
+//   const allBadges = await Badge.find({ name: { $in: allTierBadgeNames } });
+//   const badgesByName = {};
+//   allBadges.forEach(badge => {
+//     badgesByName[badge.name] = badge;
+//   });
+  
+//   // Process each skill
 //   for (const skill of fullSkills) {
-//     const count = skillCountMap[skill._id.toString()] || 0;
-//     if (!progress.skill_points_breakdown[skill.skill_Name]) {
-//       progress.skill_points_breakdown[skill.skill_Name] = 0;
-//     }
+//     const skillId = skill._id.toString();
+//     const count = skillCountMap[skillId] || 0;
+//     const skillName = skill.skill_Name;
     
-//     // Define tiers with thresholds
-//     const tiers = [
-//       { tier: "Bronze", threshold: 1 },
-//       { tier: "Silver", threshold: 3 },
-//       { tier: "Gold", threshold: 5 },
-//       { tier: "Platinum", threshold: 10 },
-//     ];
+//     // Each skill occurrence is worth 10 points
+//     const pointsPerSkill = 10;
+//     const skillPoints = count * pointsPerSkill;
     
+//     // Award badges for each tier threshold that has been met
 //     for (const { tier, threshold } of tiers) {
 //       if (count >= threshold) {
-//         const badgeName = `${skill.skill_Name} ${tier}`;
-//         const pointsAwarded = await awardBadgeOnce(progress, badgeName, 'skill_points');
-//         progress.skill_points_breakdown[skill.skill_Name] += pointsAwarded;
-//         console.log(`Awarded ${badgeName}: +${pointsAwarded} points.`);
+//         const badgeName = `${skillName} ${tier}`;
+//         const badge = badgesByName[badgeName];
+        
+//         if (badge) {
+//           if (!awardedBadgeIds.has(badge._id.toString())) {
+//             // Award new badge
+//             progress.badges.push({ badge: badge._id, awarded_at: new Date() });
+//             awardedBadgeIds.add(badge._id.toString());
+            
+//             // Display message for the badge award
+//             // These messages are just for logging and don't affect the points
+//             if (tier === "Silver") {
+//               console.log(`Awarded ${badgeName}: +20 points.`);
+//             } else {
+//               console.log(`Awarded ${badgeName}: +0 additional points.`);
+//             }
+//           }
+//         }
 //       }
 //     }
+    
+//     // Update the skill points in the breakdown
+//     progress.skill_points_breakdown[skillName] = skillPoints;
+//     progress.skill_points += skillPoints;
 //   }
+  
+//   console.log("Updated skill points breakdown:", progress.skill_points_breakdown);
+//   console.log("Total skill points:", progress.skill_points);
 // };
+
 const awardSkillBadges = async (progress) => {
   // Ensure skill_points and breakdown exist
   if (typeof progress.skill_points !== 'number') {
@@ -106,6 +160,9 @@ const awardSkillBadges = async (progress) => {
   const fullSkills = await Skill.find({ _id: { $in: uniqueLearnedSkillIds } });
   console.log("Full skills:", fullSkills);
   
+  // Store previous skill points before resetting
+  const previousSkillPoints = progress.skill_points || 0;
+  
   // Reset skill points breakdown and total
   progress.skill_points = 0;
   progress.skill_points_breakdown = {};
@@ -123,11 +180,19 @@ const awardSkillBadges = async (progress) => {
     { tier: "Platinum", threshold: 10 }
   ];
   
+  // Define bonus points for tiers (only for Silver, Gold, Platinum)
+  const tierBonus = {
+    Bronze: 0,      // Bronze badge doesn't add extra bonus (assumed to be included in badge.points)
+    Silver: 20,
+    Gold: 30,
+    Platinum: 50
+  };
+  
   // Get all badges already awarded
   const awardedBadges = progress.badges || [];
   const awardedBadgeIds = new Set(awardedBadges.map(b => b.badge.toString()));
   
-  // Create a lookup for badges by name
+  // Create a lookup for badges by name for all tiered badges
   const allTierBadgeNames = [];
   fullSkills.forEach(skill => {
     tiers.forEach(tier => {
@@ -157,32 +222,32 @@ const awardSkillBadges = async (progress) => {
         const badgeName = `${skillName} ${tier}`;
         const badge = badgesByName[badgeName];
         
-        if (badge) {
-          if (!awardedBadgeIds.has(badge._id.toString())) {
-            // Award new badge
-            progress.badges.push({ badge: badge._id, awarded_at: new Date() });
-            awardedBadgeIds.add(badge._id.toString());
-            
-            // Display message for the badge award
-            // These messages are just for logging and don't affect the points
-            if (tier === "Silver") {
-              console.log(`Awarded ${badgeName}: +20 points.`);
-            } else {
-              console.log(`Awarded ${badgeName}: +0 additional points.`);
-            }
-          }
+        if (badge && !awardedBadgeIds.has(badge._id.toString())) {
+          // Award new badge
+          progress.badges.push({ badge: badge._id, awarded_at: new Date() });
+          awardedBadgeIds.add(badge._id.toString());
+          
+          // Add the bonus points for Silver, Gold, and Platinum tiers
+          const bonus = tierBonus[tier] || 0;
+          progress.points += bonus;
+          console.log(`Awarded ${badgeName}: +${bonus} points.`);
         }
       }
     }
     
-    // Update the skill points in the breakdown
+    // Update the skill points in the breakdown and total
     progress.skill_points_breakdown[skillName] = skillPoints;
     progress.skill_points += skillPoints;
   }
   
   console.log("Updated skill points breakdown:", progress.skill_points_breakdown);
   console.log("Total skill points:", progress.skill_points);
+  
+  // Update overall total points by adding the net increase in skill points
+  progress.points += (progress.skill_points - previousSkillPoints);
 };
+
+
 const updateStreaks = async (progress) => {
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
@@ -341,6 +406,7 @@ const completeModule = async (req, res) => {
     progress.monthly_points = progress.monthly_points || [];
   
     const pointsBefore = progress.points;
+    const badgesBefore = [...progress.badges.map(b => b.badge.toString())];
   
     if (progress.completed_modules.some(m => m.module_id.toString() === module_id)) {
       return res.status(400).json({ message: "Module already completed" });
@@ -521,9 +587,13 @@ const completeModule = async (req, res) => {
     await progress.save();
     await userLearning.save();
   
-    // --- Get badges for the response ---
-    const fullBadges = await Badge.find(
-      { _id: { $in: progress.badges.map(b => b.badge) } },
+    // Get newly earned badges
+    const newlyEarnedBadgeIds = progress.badges
+      .filter(b => !badgesBefore.includes(b.badge.toString()))
+      .map(b => b.badge);
+    
+    const newlyEarnedBadges = await Badge.find(
+      { _id: { $in: newlyEarnedBadgeIds } },
       "name description type tagline points criteria hidden"
     );
   
@@ -547,11 +617,11 @@ const completeModule = async (req, res) => {
         daily_points: progress.daily_points,
         weekly_points: progress.weekly_points,
         monthly_points: progress.monthly_points,
-        badges: fullBadges.map(badgeDoc => ({
+        badges: newlyEarnedBadges.map(badgeDoc => ({
           ...badgeDoc.toObject(),
           awarded_at: progress.badges.find(b => b.badge.toString() === badgeDoc._id.toString()).awarded_at
         })),
-        total_badge_points: fullBadges.reduce((acc, badge) => acc + badge.points, 0),
+        total_badge_points: newlyEarnedBadges.reduce((acc, badge) => acc + badge.points, 0),
         dailyStreak: progress.dailyStreak,
         maxDailyStreak: progress.maxDailyStreak,
         weeklyStreak: progress.weeklyStreak,
@@ -560,7 +630,7 @@ const completeModule = async (req, res) => {
         learnedSkills: progress.learnedSkills,
         skill_points_breakdown: progress.skill_points_breakdown,
         total_skill_points: progress.skill_points
-      },
+      }
     });
   } catch (error) {
     console.error("Error completing module:", error);
