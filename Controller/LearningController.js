@@ -532,11 +532,13 @@ const addUserLearningByUniqueModule = async (req, res) => {
 
 const checkUserLearningModule = async (req, res) => {
   try {
-    const user_id = req.user.id; // or req.user._id, depending on your middleware
+    const user_id = req.user.id;
     const { module_id } = req.body;
 
     if (!module_id) {
-      return res.status(400).json({ exists: false, message: "Module ID is required." });
+      return res
+        .status(400)
+        .json({ exists: false, message: "Module ID is required." });
     }
 
     // Find the module using its unique module identifier and populate its section and theme.
@@ -546,44 +548,64 @@ const checkUserLearningModule = async (req, res) => {
     });
 
     if (!moduleDoc) {
-      return res.status(404).json({ exists: false, message: "Module not found." });
+      return res
+        .status(404)
+        .json({ exists: false, message: "Module not found." });
     }
     if (!moduleDoc.section_id) {
-      return res.status(404).json({ exists: false, message: "Section not found for this module." });
+      return res
+        .status(404)
+        .json({ exists: false, message: "Section not found for this module." });
     }
 
     // Retrieve the consolidated UserLearning document for this user.
     const userLearning = await UserLearning.findOne({ user_id });
-    if (!userLearning) {
-      return res.status(200).json({ exists: false, message: "Module does not exist in your learning preferences." });
+    if (!userLearning || !userLearning.sections || userLearning.sections.length === 0) {
+      return res.status(200).json({
+        exists: false,
+        message: "Module does not exist in your learning preferences."
+      });
     }
 
-    // Find the section entry matching the module's section.
-    const sectionEntry = userLearning.sections.find(
-      sec => sec.section_id.toString() === moduleDoc.section_id._id.toString()
-    );
-    if (!sectionEntry) {
-      return res.status(200).json({ exists: false, message: "Module does not exist in your learning preferences." });
+    // Compare the unique_ModuleID robustly across all sections.
+    const uniqueModuleID = moduleDoc.unique_ModuleID.toString();
+    let moduleExists = false;
+
+    for (const section of userLearning.sections) {
+      // Check in the regular modules array.
+      if (section.modules && Array.isArray(section.modules)) {
+        const existsInModules = section.modules.some(mod => {
+          return mod.unique_ModuleID && mod.unique_ModuleID.toString() === uniqueModuleID;
+        });
+        if (existsInModules) {
+          moduleExists = true;
+          break;
+        }
+      }
+      // Check in the ai_recommendation array.
+      if (section.ai_recommendation && Array.isArray(section.ai_recommendation)) {
+        const existsInAIRec = section.ai_recommendation.some(rec => {
+          return rec.unique_ModuleID && rec.unique_ModuleID.toString() === uniqueModuleID;
+        });
+        if (existsInAIRec) {
+          moduleExists = true;
+          break;
+        }
+      }
     }
 
-    // Check if the module exists in either the user-preferred modules or the AI recommendations.
-    const existsInModules = sectionEntry.modules.some(
-      mod => mod.unique_ModuleID === moduleDoc.unique_ModuleID
-    );
-    const existsInAIRec = sectionEntry.ai_recommendation.some(
-      mod => mod.unique_ModuleID === moduleDoc.unique_ModuleID
-    );
-
-    if (existsInModules || existsInAIRec) {
-      return res.status(200).json({ exists: true, message: "Module already exists in your learning preferences." });
-    } else {
-      return res.status(200).json({ exists: false, message: "Module does not exist in your learning preferences." });
-    }
+    return res.status(200).json({
+      exists: moduleExists,
+      message: moduleExists
+        ? "Module already exists in your learning preferences."
+        : "Module does not exist in your learning preferences."
+    });
   } catch (error) {
     console.error("Error checking user learning module:", error);
     res.status(500).json({ exists: false, message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
