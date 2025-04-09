@@ -40,9 +40,20 @@ const createSection = async (req, res) => {
 //  Get All Sections 
 const getSections = async (req, res) => {
     try {
-        const sections = await Section.find().populate("theme_id", "name");
+        const sections = await Section.find()
+            .populate("theme_id", "name")
+            .populate({
+                path: "modules",
+                select: "name _id"
+            });
 
-        res.status(200).json(sections);
+        // Add module count for each section
+        const sectionsWithModuleCount = sections.map(section => ({
+            ...section.toObject(),
+            moduleCount: section.modules.length
+        }));
+
+        res.status(200).json(sectionsWithModuleCount);
     } catch (error) {
         console.error("❌ Error retrieving sections:", error);
         res.status(500).json({ message: "Internal Server Error" });
@@ -82,14 +93,27 @@ const getSectionById = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Section ID is required." });
         }
-        const section = await Section.findById(id).populate("theme_id", "name");
+        
+        const section = await Section.findById(id)
+            .populate("theme_id", "name")
+            .populate({
+                path: "modules",
+                select: "name _id"
+            });
+
         if (!section) {
             return res.status(404).json({ message: "Section not found." });
         }
 
-        res.status(200).json(section);
+        // Add module count
+        const sectionWithModuleCount = {
+            ...section.toObject(),
+            moduleCount: section.modules.length
+        };
+
+        res.status(200).json(sectionWithModuleCount);
     } catch (error) {
-        console.error(" Error retrieving section:", error);
+        console.error("Error retrieving section:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
