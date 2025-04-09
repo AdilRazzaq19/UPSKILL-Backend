@@ -16,17 +16,27 @@ const createTheme = async (req, res) => {
 
 const getThemes = async (req, res) => {
     try {
-        const themes = await Theme.find() 
+        const themes = await Theme.find()
             .populate({
                 path: "sections",
-                select: "name _id", 
+                select: "name _id modules",
                 populate: {
                     path: "modules",
-                    select: "name _id", 
+                    select: "name _id",
                 },
             });
 
-        res.status(200).json(themes);
+        // Add section count and module count for each section
+        const themesWithCounts = themes.map(theme => ({
+            ...theme.toObject(),
+            sectionCount: theme.sections.length,
+            sections: theme.sections.map(section => ({
+                ...section.toObject(),
+                moduleCount: section.modules.length
+            }))
+        }));
+
+        res.status(200).json(themesWithCounts);
     } catch (error) {
         console.error("Error retrieving themes:", error);
         res.status(500).json({ message: "Internal Server Error" });

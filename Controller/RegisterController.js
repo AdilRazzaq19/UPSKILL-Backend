@@ -23,7 +23,7 @@ const verifyToken = (token) => {
 // Admin Registration
 const RegisterAdmin = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { username,email, password } = req.body;
         const admin = await Admin.findOne({ email });
 
         if (admin) {
@@ -31,7 +31,7 @@ const RegisterAdmin = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newAdmin = new Admin({ email, password: hashedPassword });
+        const newAdmin = new Admin({ username,email, password: hashedPassword });
 
         await newAdmin.save();
 

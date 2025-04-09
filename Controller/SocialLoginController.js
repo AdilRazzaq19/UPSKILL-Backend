@@ -84,6 +84,7 @@ const socialLogin = async (req, res) => {
 
       user.userProgress = progressDoc._id;
       await user.save();
+      
       const newToken = generateToken(user._id, role);
       return res.status(201).json({
         message: "User registered successfully",
