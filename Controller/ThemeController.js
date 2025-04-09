@@ -47,11 +47,24 @@ const getThemes = async (req, res) => {
 // Get Single Theme
 const getThemeById = async (req, res) => {
     try {
-        const theme = await Theme.findById(req.params.id);
+        const theme = await Theme.findById(req.params.id)
+            .populate({
+                path: "sections",
+                select: "name _id ",
+
+            });
+
         if (!theme) {
             return res.status(404).json({ message: "Theme not found" });
         }
-        res.status(200).json(theme);
+
+        // Add section count and module count for each section
+        const themeWithCounts = {
+            ...theme.toObject(),
+            sectionCount: theme.sections.length,
+        };
+
+        res.status(200).json(themeWithCounts);
     } catch (error) {
         console.error("Error retrieving theme:", error);
         res.status(500).json({ message: "Internal Server Error" });
