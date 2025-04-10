@@ -15,8 +15,12 @@ const ModuleSchema = new Schema({
     trim: true 
   },
   description: { 
-    type: String, 
-    required: true 
+    type: String 
+  },
+  theme_id: {
+    type: Schema.Types.ObjectId,
+    ref: "Theme",
+    required: true
   },
   video: {
     type: Schema.Types.ObjectId,

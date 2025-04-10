@@ -1,122 +1,120 @@
 const Module = require("../Models/Module");
 const Section = require("../Models/Section");
 const FlashcardResponse = require("../Models/FlashCard");
+const Theme = require("../Models/Theme");
 
-  const createModule = async (req, res) => {
+const createModule = async (req, res) => {
     try {
-      const { unique_ModuleID, name, description, section_id, prerequisites } = req.body;
+        const { unique_ModuleID,name, section_id, theme_id} = req.body;
 
-      if (req.userRole !== "admin") {
-        return res.status(403).json({ message: "Only admins can create modules." });
-      }
-
-      if (!unique_ModuleID || !name || !description || !section_id) {
-        return res.status(400).json({ message: "unique_ModuleID, name, description, and section_id are required." });
-      }
-
-      const existingModule = await Module.findOne({ unique_ModuleID });
-      if (existingModule) {
-        return res.status(400).json({ message: "A module with this unique_ModuleID already exists." });
-      }
-
-      const sectionExists = await Section.findById(section_id);
-      if (!sectionExists) {
-        return res.status(404).json({ message: "Section not found." });
-      }
-
-      if (prerequisites && prerequisites.length > 0) {
-        const prerequisiteModules = await Module.find({ _id: { $in: prerequisites } });
-        if (prerequisiteModules.length !== prerequisites.length) {
-          return res.status(400).json({ message: "One or more prerequisite modules do not exist." });
+        // Validate required fields
+        if (!unique_ModuleID || !name || !section_id || !theme_id) {
+            return res.status(400).json({ message: "Unique Module ID, Name, Section ID, and Theme ID are required." });
         }
-        if (prerequisites.includes(unique_ModuleID)) {
-          return res.status(400).json({ message: "A module cannot be its own prerequisite." });
-        }
-      }
 
-      const newModule = new Module({
-        unique_ModuleID,
-        name,
-        description,
-        section_id,
-        prerequisites,
+        const existingModule = await Module.findOne({ unique_ModuleID });
+        if (existingModule) {
+          return res.status(400).json({ message: "A module with this unique_ModuleID already exists." });
+        }        
+        // Check if the section exists
+        const sectionExists = await Section.findById(section_id);
+        if (!sectionExists) {
+            return res.status(404).json({ message: "Section not found." });
+        }
+
+        // Check if the theme exists
+        const themeExists = await Theme.findById(theme_id);
+        if (!themeExists) {
+            return res.status(404).json({ message: "Theme not found." });
+        }
+
+        // Create a new module
+        const newModule = new Module({
+            unique_ModuleID,
+            name,
+            section_id,
+            theme_id,
         });
-      await newModule.save();
 
-      sectionExists.modules.push(newModule._id);
-      await sectionExists.save();
+        // Save the new module
+        await newModule.save();
 
-      res.status(201).json({ message: "Module created successfully", module: newModule });
+        // Optionally, add the module to the section's modules array
+        sectionExists.modules.push(newModule._id);
+        await sectionExists.save();
+
+        res.status(201).json({
+            message: "Module created successfully",
+            module: newModule
+        });
     } catch (error) {
-      console.error("Error creating module:", error);
-      res.status(500).json({ message: "Internal Server Error" });
+        console.error("Error creating module:", error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
-  };
+};
 
 
   
   const getModules = async (req, res) => {
     try {
-      const modules = await Module.find()
-        .populate({
-          path: "section_id",
-          select: "name theme_id",
-          populate: {
-            path: "theme_id", 
-            select: "name"    
-          }
-        })
-        .populate({
-          path: "video",
-          select: "_id youtubeVideo_id video_url channel_name publish_date likes_count views_count"
-        })
-        .lean();
-  
-      // Extract all youtubeVideo_ids from the modules that have video details.
-      const videoIds = modules
-        .filter(mod => mod.video && mod.video.youtubeVideo_id)
-        .map(mod => mod.video.youtubeVideo_id);
-  
-      const flashcards = await FlashcardResponse.find({
-        video_id: { $in: videoIds },
-        section: "introduction"
-      }).lean();
-  
-      const flashcardMap = {};
-      flashcards.forEach(fc => {
-        flashcardMap[fc.video_id] = fc.content;
-      });
-  
-      const extractFirstParagraph = (content) => {
-        if (!content) return "";
-        content = content.replace(/#\s*Topic Overview\s*/i, "");
-        const paragraphs = content.split(/\n\s*\n/);
-        for (let p of paragraphs) {
-          const trimmed = p.trim();
-          if (trimmed) {
-            return trimmed;
-          }
-        }
-        return "";
-      };
-  
-      modules.forEach(moduleObj => {
-        if (moduleObj.video && moduleObj.video.youtubeVideo_id) {
-          const fcContent = flashcardMap[moduleObj.video.youtubeVideo_id];
-          moduleObj.introduction = fcContent ? extractFirstParagraph(fcContent) : null;
-        } else {
-          moduleObj.introduction = null;
-        }
-      });
-  
-      res.status(200).json(modules);
+        const modules = await Module.find()
+            .populate({
+                path: "section_id",
+                select: "name theme_id",
+                populate: {
+                    path: "theme_id", 
+                    select: "name"    
+                }
+            })
+            .populate({
+                path: "video",
+                select: "_id youtubeVideo_id video_url channel_name publish_date likes_count views_count"
+            })
+            .lean();
+
+        // Extract all youtubeVideo_ids from the modules that have video details.
+        const videoIds = modules
+            .filter(mod => mod.video && mod.video.youtubeVideo_id)
+            .map(mod => mod.video.youtubeVideo_id);
+
+        const flashcards = await FlashcardResponse.find({
+            video_id: { $in: videoIds },
+            section: "introduction"
+        }).lean();
+
+        const flashcardMap = {};
+        flashcards.forEach(fc => {
+            flashcardMap[fc.video_id] = fc.content;
+        });
+
+        const extractFirstParagraph = (content) => {
+            if (!content) return "";
+            content = content.replace(/#\s*Topic Overview\s*/i, "");
+            const paragraphs = content.split(/\n\s*\n/);
+            for (let p of paragraphs) {
+                const trimmed = p.trim();
+                if (trimmed) {
+                    return trimmed;
+                }
+            }
+            return "";
+        };
+
+        modules.forEach(moduleObj => {
+            if (moduleObj.video && moduleObj.video.youtubeVideo_id) {
+                const fcContent = flashcardMap[moduleObj.video.youtubeVideo_id];
+                moduleObj.introduction = fcContent ? extractFirstParagraph(fcContent) : null;
+            } else {
+                moduleObj.introduction = null;
+            }
+        });
+
+        res.status(200).json(modules);
     } catch (error) {
       console.error("Error retrieving modules:", error);
       res.status(500).json({ message: "Internal Server Error" });
     }
-  };
-  
-
+};
 
 const getModuleById = async (req, res) => {
     try {
@@ -143,8 +141,6 @@ const getModuleById = async (req, res) => {
         return res.status(500).json({ error: "Internal Server Error" });
     }
 };
-
-  
 
 const getModulesBySectionId = async (req, res) => {
     try {
@@ -204,7 +200,6 @@ const deleteModule = async (req, res) => {
   }
 };
 
-
 const getModuleDetailsByUniqueModuleId = async (req, res) => {
   try {
     // Retrieve unique_ModuleID from the query string
@@ -237,11 +232,6 @@ const getModuleDetailsByUniqueModuleId = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
-
-
-
-
-
 
 const updateModuleName = async (req, res) => {
   try {
@@ -282,9 +272,6 @@ const updateModuleName = async (req, res) => {
     });
   }
 };
-
-
-
 
 module.exports = { 
   createModule, 
