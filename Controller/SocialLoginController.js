@@ -1,8 +1,9 @@
 const jwt = require("jsonwebtoken");
 const User = require("../Models/User");
+const UserProgress = require("../Models/userProgress"); // <-- Added import
 
-const ADMIN_TOKEN_EXPIRATION = "24h";
-const USER_TOKEN_EXPIRATION = "24h";
+const ADMIN_TOKEN_EXPIRATION = "30d";
+const USER_TOKEN_EXPIRATION = "30d";
 
 const generateToken = (userId, role) => {
   const expiresIn = role === "admin" ? ADMIN_TOKEN_EXPIRATION : USER_TOKEN_EXPIRATION;
@@ -81,7 +82,7 @@ const socialLogin = async (req, res) => {
 
       const progressDoc = new UserProgress({ user_id: user._id });
       await progressDoc.save();
-
+      
       user.userProgress = progressDoc._id;
       await user.save();
       

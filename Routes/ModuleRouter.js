@@ -1,6 +1,5 @@
 const express = require("express");
 const { createModule, getModules, getModuleById, updateModule,updateModuleName, deleteModule,getModulesBySectionId,getModuleDetailsByUniqueModuleId } = require("../Controller/ModuleController");
-const {authMiddleware} = require("../middleware/auth.middleware");
 const router = express.Router();
 
 router.post("/create",createModule);
