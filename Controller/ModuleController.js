@@ -380,16 +380,16 @@ const getAllModulesForAdmin = async (req, res) => {
 
 const updateModuleforAdmin = async (req, res) => {
   try {
-    // Get the module ID from query string
-    const { id } = req.query;
-    if (!id) {
+    // Get the module ID from URL path parameter instead of query string
+    const { moduleId } = req.params;
+    if (!moduleId) {
       return res.status(400).json({ message: "Module ID is required." });
     }
 
     const updateData = req.body;
 
     // Find the module document by ID
-    const moduleDoc = await Module.findById(id);
+    const moduleDoc = await Module.findById(moduleId);
     if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found." });
     }
