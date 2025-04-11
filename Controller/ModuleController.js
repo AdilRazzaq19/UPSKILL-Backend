@@ -3,7 +3,7 @@ const Section = require("../Models/Section");
 const FlashcardResponse = require("../Models/FlashCard");
 const Theme = require("../Models/Theme");
 const UserProgress = require("../Models/userProgress");
-const VideoSkill = require("../Models/Video");
+const Video = require('../Models/Video'); // Adjust path if needed
 
 const createModule = async (req, res) => {
     try {
@@ -380,7 +380,7 @@ const getAllModulesForAdmin = async (req, res) => {
 
 const updateModuleforAdmin = async (req, res) => {
   try {
-    // Get the module ID from URL path parameter instead of query string
+    // Get the module ID from URL path parameter
     const { moduleId } = req.params;
     if (!moduleId) {
       return res.status(400).json({ message: "Module ID is required." });
@@ -405,36 +405,20 @@ const updateModuleforAdmin = async (req, res) => {
     if (updateData.video) {
       // If the module already has an associated video, update its fields.
       if (moduleDoc.video) {
-        const videoDoc = await Video.findById(moduleDoc.video);
-        if (videoDoc) {
-          if (updateData.video.videoUrl)
-            videoDoc.video_url = updateData.video.videoUrl;
-          if (updateData.video.learnedSkills)
-            videoDoc.learnedSkills = updateData.video.learnedSkills;
-          // Optionally, update other video fields if needed.
-          await videoDoc.save();
+        try {
+          const videoDoc = await Video.findById(moduleDoc.video);
+          if (videoDoc) {
+            if (updateData.video.videoUrl)
+              videoDoc.video_url = updateData.video.videoUrl;
+            if (updateData.video.learnedSkills)
+              videoDoc.learnedSkills = updateData.video.learnedSkills;
+            // Optionally, update other video fields if needed.
+            await videoDoc.save();
+          }
+        } catch (videoError) {
+          console.error("Error updating video:", videoError);
+          // Continue with module update even if video update fails
         }
-      } else {
-        // Optional: Create a new video if the module doesn't have one.
-        // Uncomment the code below if you wish to create a new Video document.
-        /*
-        const newVideo = new Video({
-          youtubeVideo_id: updateData.video.youtubeVideo_id, // if provided
-          title: updateData.video.title,                       // if provided
-          description: updateData.video.description,           // if provided
-          video_url: updateData.video.videoUrl,
-          channel_id: updateData.video.channel_id,             // if provided
-          channel_name: updateData.video.channel_name,         // if provided
-          publish_date: updateData.video.publish_date,         // if provided
-          likes_count: updateData.video.likes_count || 0,
-          views_count: updateData.video.views_count || 0,
-          tags: updateData.video.tags || [],
-          learnedSkills: updateData.video.learnedSkills || [],
-          module_id: moduleDoc._id,
-        });
-        await newVideo.save();
-        moduleDoc.video = newVideo._id;
-        */
       }
     }
 
@@ -453,7 +437,6 @@ const updateModuleforAdmin = async (req, res) => {
     });
   }
 };
-
 
 module.exports = { 
   createModule, 
