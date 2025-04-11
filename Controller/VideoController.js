@@ -31,6 +31,9 @@ const getTranscriptionByVideoId = async (req, res) => {
     // Explicitly connect to the upskill database
     const upskillDb = client.db('upskill');
     
+    // Get the list of collections in the upskill database
+    const collections = await upskillDb.listCollections().toArray();
+    
     // First try with upskill_model.transcriptions
     const collectionName = 'upskill_model.transcriptions';
     console.log(`Checking if collection ${collectionName} exists`);
