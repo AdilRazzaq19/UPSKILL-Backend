@@ -834,7 +834,9 @@ const userRanking = async (req, res) => {
       .populate('user_id', 'username')
       .sort({ points: -1 });
       
-    const totalUsers = progressList.length;
+    // Filter out records where user_id is null or missing _id.
+    const validProgressList = progressList.filter(item => item.user_id && item.user_id._id);
+    const totalUsers = validProgressList.length;
 
     let rankedList = [];
     let lastPoints = null;
@@ -842,7 +844,7 @@ const userRanking = async (req, res) => {
     let lastPercentile = 0;
 
     for (let i = 0; i < totalUsers; i++) {
-      const current = progressList[i];
+      const current = validProgressList[i];
       let ordinalRank, percentile;
 
       if (i === 0) {
@@ -881,6 +883,7 @@ const userRanking = async (req, res) => {
   }
 };
 
+
 const userIndividualRanking = async (req, res) => {
   try {
     const user_id = req.user._id;
@@ -893,14 +896,16 @@ const userIndividualRanking = async (req, res) => {
       .populate('user_id', 'username')
       .sort({ points: -1 });
       
-    const totalUsers = progressList.length;
+    // Filter out records with null user_id to prevent errors.
+    const validProgressList = progressList.filter(item => item.user_id && item.user_id._id);
+    const totalUsers = validProgressList.length;
     
     let rankedList = [];
     let lastPoints = null;
     let lastOrdinalRank = 0;
     let lastPercentile = 0;
     for (let i = 0; i < totalUsers; i++) {
-      const current = progressList[i];
+      const current = validProgressList[i];
       let ordinalRank, percentile;
   
       if (i === 0) {
@@ -955,12 +960,15 @@ const userCompleteRanking = async (req, res) => {
       .populate("user_id", "username")
       .sort({ points: -1 });
 
-    if (!progressList.length) {
+    // Filter out records with null user_id to prevent errors.
+    const validProgressList = progressList.filter(item => item.user_id && item.user_id._id);
+
+    if (!validProgressList.length) {
       return res.status(404).json({ message: "No progress data found." });
     }
 
-    // Get all user IDs from the progress list
-    const userIds = progressList.map(item => item.user_id._id);
+    // Get all user IDs from the valid progress list
+    const userIds = validProgressList.map(item => item.user_id._id);
 
     // Fetch the onboarding records for these users
     const onboardingRecords = await Onboarding.find({ user_id: { $in: userIds } });
@@ -971,12 +979,12 @@ const userCompleteRanking = async (req, res) => {
     });
 
     // ---------------- Overall Ranking ----------------
-    const totalUsers = progressList.length;
+    const totalUsers = validProgressList.length;
     let overallRankedList = [];
     let lastPoints = null, lastOrdinalRank = 0, lastPercentile = 0;
 
     for (let i = 0; i < totalUsers; i++) {
-      const current = progressList[i];
+      const current = validProgressList[i];
       let ordinalRank, percentile;
       if (i === 0) {
         ordinalRank = 1;
@@ -1023,7 +1031,7 @@ const userCompleteRanking = async (req, res) => {
     }
 
     // ---------------- Industry Ranking ----------------
-    const industryList = progressList.filter(item => {
+    const industryList = validProgressList.filter(item => {
       const onboarding = onboardingMap[item.user_id._id.toString()];
       return onboarding && onboarding.industry === userIndustry;
     });
@@ -1064,7 +1072,7 @@ const userCompleteRanking = async (req, res) => {
     }
 
     // ---------------- Department Ranking ----------------
-    const departmentList = progressList.filter(item => {
+    const departmentList = validProgressList.filter(item => {
       const onboarding = onboardingMap[item.user_id._id.toString()];
       return onboarding && onboarding.department === userDepartment;
     });
@@ -1127,6 +1135,7 @@ const userCompleteRanking = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 module.exports = {
   completeModule,
