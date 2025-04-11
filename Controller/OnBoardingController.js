@@ -149,4 +149,28 @@ const retrieveData = async (req, res) => {
     }
   };  
 
-module.exports = { createOnBoarding, retrieveData, updateOnboarding};
+  const getAllUserProfiles = async (req, res) => {
+    try {
+      // Find all onboarding records and populate with user details
+      const allOnboardingData = await Onboarding.find({})
+        .populate("user_id", "username email");
+  
+      if (!allOnboardingData || allOnboardingData.length === 0) {
+        return res.status(404).json({ message: "No user profiles found" });
+      }
+  
+      // Transform the data to include username and email at the top level
+      const profiles = allOnboardingData.map(profile => {
+        const profileData = profile.toObject();
+        
+        return profileData;
+      });
+  
+      res.status(200).json(profiles);
+    } catch (error) {
+      console.error("Error retrieving all user profiles:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  };
+
+module.exports = { createOnBoarding, retrieveData, updateOnboarding, getAllUserProfiles};
