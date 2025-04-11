@@ -2,6 +2,8 @@ const Module = require("../Models/Module");
 const Section = require("../Models/Section");
 const FlashcardResponse = require("../Models/FlashCard");
 const Theme = require("../Models/Theme");
+const UserProgress = require("../Models/userProgress");
+const VideoSkill = require("../Models/Video");
 
 const createModule = async (req, res) => {
     try {
@@ -273,6 +275,110 @@ const updateModuleName = async (req, res) => {
   }
 };
 
+
+const getAllModulesForAdmin = async (req, res) => {
+  try {
+    // Step 1: Get basic module data with video, section and theme info.
+    // Nested population is used to populate the video's learnedSkills field.
+    const modules = await Module.find()
+      .populate({
+        path: "section_id",
+        select: "name theme_id",
+        populate: {
+          path: "theme_id",
+          select: "name"
+        }
+      })
+      .populate({
+        path: "video",
+        select: "_id youtubeVideo_id video_url channel_name publish_date likes_count views_count learnedSkills",
+        populate: {
+          path: "learnedSkills",
+          select: "skill_Name"
+        }
+      })
+      .lean();
+
+    // Extract module IDs for aggregation.
+    const moduleIds = modules.map(module => module._id);
+
+    // Step 2: Get completion counts.
+    // Unwind the completed_modules array and group by the module_id inside it.
+    const completionCounts = await UserProgress.aggregate([
+      { $unwind: "$completed_modules" },
+      {
+        $match: {
+          "completed_modules.module_id": { $in: moduleIds }
+        }
+      },
+      {
+        $group: {
+          _id: "$completed_modules.module_id",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create a lookup map for faster access.
+    const completionMap = {};
+    completionCounts.forEach(item => {
+      // The _id here is a module_id.
+      completionMap[item._id.toString()] = item.count;
+    });
+
+    // Step 3: Combine all data.
+    const moduleData = modules.map(module => {
+      const moduleId = module._id.toString();
+      return {
+        _id: module._id,
+        unique_ModuleID: module.unique_ModuleID,
+        moduleId: module._id,
+        moduleName: module.name,
+        sectionName: module.section_id ? module.section_id.name : 'Unknown Section',
+        sectionId: module.section_id ? module.section_id._id : null,
+        themeName:
+          module.section_id && module.section_id.theme_id
+            ? module.section_id.theme_id.name
+            : 'Unknown Theme',
+        themeId:
+          module.section_id && module.section_id.theme_id
+            ? module.section_id.theme_id._id
+            : null,
+        creationDate: module.createdAt,
+        video: module.video
+          ? {
+              videoId: module.video._id,
+              youtubeVideoId: module.video.youtubeVideo_id,
+              videoUrl: module.video.video_url,
+              channelName: module.video.channel_name,
+              publishDate: module.video.publish_date,
+              likesCount: module.video.likes_count || 0,
+              viewsCount: module.video.views_count || 0,
+              // Use the populated learnedSkills field.
+              learnedSkills: module.video.learnedSkills
+                ? module.video.learnedSkills.map(skill => ({
+                    _id: skill._id,
+                    skill_Name: skill.skill_Name
+                  }))
+                : []
+            }
+          : null,
+        completionCount: completionMap[moduleId] || 0,
+      };
+    });
+
+    // Return only the analytics data.
+    res.status(200).json(moduleData);
+  } catch (error) {
+    console.error("Error retrieving module data:", error);
+    res.status(500).json({ 
+      message: "Internal Server Error", 
+      error: error.message 
+    });
+  }
+};
+
+
 module.exports = { 
   createModule, 
   getModules, 
@@ -281,5 +387,6 @@ module.exports = {
   deleteModule, 
   getModulesBySectionId,
   getModuleDetailsByUniqueModuleId,
-  updateModuleName
+  updateModuleName,
+  getAllModulesForAdmin
 };
