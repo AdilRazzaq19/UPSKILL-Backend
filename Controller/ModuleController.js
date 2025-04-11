@@ -378,6 +378,82 @@ const getAllModulesForAdmin = async (req, res) => {
   }
 };
 
+const updateModuleforAdmin = async (req, res) => {
+  try {
+    // Get the module ID from query string
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ message: "Module ID is required." });
+    }
+
+    const updateData = req.body;
+
+    // Find the module document by ID
+    const moduleDoc = await Module.findById(id);
+    if (!moduleDoc) {
+      return res.status(404).json({ message: "Module not found." });
+    }
+
+    // Update top-level module fields
+    if (updateData.moduleName) moduleDoc.name = updateData.moduleName;
+    if (updateData.themeName) moduleDoc.themeName = updateData.themeName;
+    if (updateData.themeId) moduleDoc.theme_id = updateData.themeId;
+    if (updateData.sectionName) moduleDoc.sectionName = updateData.sectionName;
+    if (updateData.sectionId) moduleDoc.section_id = updateData.sectionId;
+
+    // Check if the update includes video fields
+    if (updateData.video) {
+      // If the module already has an associated video, update its fields.
+      if (moduleDoc.video) {
+        const videoDoc = await Video.findById(moduleDoc.video);
+        if (videoDoc) {
+          if (updateData.video.videoUrl)
+            videoDoc.video_url = updateData.video.videoUrl;
+          if (updateData.video.learnedSkills)
+            videoDoc.learnedSkills = updateData.video.learnedSkills;
+          // Optionally, update other video fields if needed.
+          await videoDoc.save();
+        }
+      } else {
+        // Optional: Create a new video if the module doesn't have one.
+        // Uncomment the code below if you wish to create a new Video document.
+        /*
+        const newVideo = new Video({
+          youtubeVideo_id: updateData.video.youtubeVideo_id, // if provided
+          title: updateData.video.title,                       // if provided
+          description: updateData.video.description,           // if provided
+          video_url: updateData.video.videoUrl,
+          channel_id: updateData.video.channel_id,             // if provided
+          channel_name: updateData.video.channel_name,         // if provided
+          publish_date: updateData.video.publish_date,         // if provided
+          likes_count: updateData.video.likes_count || 0,
+          views_count: updateData.video.views_count || 0,
+          tags: updateData.video.tags || [],
+          learnedSkills: updateData.video.learnedSkills || [],
+          module_id: moduleDoc._id,
+        });
+        await newVideo.save();
+        moduleDoc.video = newVideo._id;
+        */
+      }
+    }
+
+    // Save the updated module
+    await moduleDoc.save();
+
+    return res.status(200).json({
+      message: "Module updated successfully",
+      module: moduleDoc,
+    });
+  } catch (error) {
+    console.error("Error updating module:", error);
+    return res.status(500).json({
+      message: "Error updating module",
+      error: error.message,
+    });
+  }
+};
+
 
 module.exports = { 
   createModule, 
@@ -388,5 +464,6 @@ module.exports = {
   getModulesBySectionId,
   getModuleDetailsByUniqueModuleId,
   updateModuleName,
-  getAllModulesForAdmin
-};
+  getAllModulesForAdmin,
+  updateModuleforAdmin 
+};  

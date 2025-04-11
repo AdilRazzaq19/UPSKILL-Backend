@@ -1,5 +1,5 @@
 const express = require("express");
-const { createModule, getModules, getModuleById, updateModule,updateModuleName, deleteModule,getModulesBySectionId,getModuleDetailsByUniqueModuleId, getAllModulesForAdmin } = require("../Controller/ModuleController");
+const { createModule, getModules, getModuleById, updateModule,updateModuleName, deleteModule,getModulesBySectionId,getModuleDetailsByUniqueModuleId, getAllModulesForAdmin, updateModuleforAdmin,} = require("../Controller/ModuleController");
 const router = express.Router();
 
 router.post("/create",createModule);
@@ -11,5 +11,5 @@ router.delete("/delete/:id", deleteModule);
 router.get("/getModuleByUniqueId", getModuleDetailsByUniqueModuleId);
 router.put('/name-update/:moduleId', updateModuleName);
 router.get("/getAllModulesForAdmin", getAllModulesForAdmin);
-
+router.put("/updateModuleforAdmin/:moduleId", updateModuleforAdmin);
 module.exports = router;
