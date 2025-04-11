@@ -4,6 +4,7 @@ const Module = require("../Models/Module");
 const axios = require("axios");
 const iso8601 = require("iso8601-duration");
 require("dotenv").config();
+const mongoose = require("mongoose");
 
 const API_KEY = process.env.YOUTUBE_API_KEY;
 
@@ -13,6 +14,144 @@ const extractVideoId = (url) => {
   return match ? match[1] : null;
 };
 
+const getTranscriptionByVideoId = async (req, res) => {
+  try {
+    const { video_id } = req.params;
+    
+    if (!video_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Video ID is required' 
+      });
+    }
+    
+    console.log(`Retrieving transcript for video ID: ${video_id}`);
+    const client = mongoose.connection.client;
+    
+    // Explicitly connect to the upskill database
+    const upskillDb = client.db('upskill');
+    
+    // First try with upskill_model.transcriptions
+    const collectionName = 'upskill_model.transcriptions';
+    console.log(`Checking if collection ${collectionName} exists`);
+    
+    const collectionExists = collections.some(c => c.name === collectionName);
+    
+    if (!collectionExists) {
+      console.log(`Collection ${collectionName} does not exist in upskill database`);
+      return res.status(404).json({
+        success: false,
+        message: `Collection ${collectionName} does not exist in upskill database`,
+        availableCollections: collections.map(c => c.name)
+      });
+    }
+    
+    const transcriptionsCollection = upskillDb.collection(collectionName);
+    
+    // Get a count of documents
+    const totalDocuments = await transcriptionsCollection.countDocuments();
+    console.log(`Total documents in ${collectionName}: ${totalDocuments}`);
+    
+    if (totalDocuments === 0) {
+      console.log(`Collection ${collectionName} exists but is empty`);
+      return res.status(404).json({
+        success: false,
+        message: `Collection ${collectionName} exists but is empty`
+      });
+    }
+    
+    // Get sample document to verify collection structure
+    const sampleDocument = await transcriptionsCollection.findOne({});
+    console.log(`Sample document from collection:`, 
+      sampleDocument ? Object.keys(sampleDocument) : 'No documents found');
+    
+    // Try to find the document with the specified video_id
+    const result = await transcriptionsCollection.findOne({ video_id });
+    
+    if (result) {
+      const transcriptValue = result.transcription || result.transcript || result.text || result.content;
+      
+      if (transcriptValue) {
+        console.log("Transcript found");
+        return res.status(200).json({ 
+          success: true, 
+          transcript: transcriptValue,
+          transcription_path: result.transcription_path || result.path || null,
+          mcq_data: result.mcq_data || null
+        });
+      } else {
+        console.log("Document found but no transcript field:", Object.keys(result));
+        return res.status(404).json({ 
+          success: false, 
+          message: "Document found but no transcript field available",
+          availableFields: Object.keys(result)
+        });
+      }
+    } else {
+      // If not found by video_id, try other possible field names
+      const possibleIdFields = ['youtubeVideo_id', 'videoId', 'youtube_id'];
+      let foundDoc = null;
+      
+      for (const field of possibleIdFields) {
+        console.log(`Trying to find document with ${field} = "${video_id}"`);
+        foundDoc = await transcriptionsCollection.findOne({ [field]: video_id });
+        if (foundDoc) {
+          console.log(`Found document using field: ${field}`);
+          break;
+        }
+      }
+      
+      if (foundDoc) {
+        const transcriptValue = foundDoc.transcription || foundDoc.transcript || foundDoc.text || foundDoc.content;
+        
+        if (transcriptValue) {
+          console.log("Transcript found");
+          return res.status(200).json({ 
+            success: true, 
+            transcript: transcriptValue,
+            transcription_path: foundDoc.transcription_path || foundDoc.path || null,
+            mcq_data: foundDoc.mcq_data || null
+          });
+        } else {
+          console.log("Document found but no transcript field:", Object.keys(foundDoc));
+          return res.status(404).json({ 
+            success: false, 
+            message: "Document found but no transcript field available",
+            availableFields: Object.keys(foundDoc)
+          });
+        }
+      }
+      
+      // If still not found, check the videos collection for embedded transcripts
+      console.log("Checking videos collection for embedded transcripts");
+      const videosCollection = upskillDb.collection('videos');
+      const video = await videosCollection.findOne({ youtubeVideo_id: video_id });
+      
+      if (video && (video.transcript || video.transcription)) {
+        console.log("Found transcript in videos collection");
+        return res.status(200).json({ 
+          success: true, 
+          transcript: video.transcript || video.transcription,
+          note: "Found in videos collection"
+        });
+      }
+      
+      // If still not found, return 404
+      return res.status(404).json({ 
+        success: false, 
+        message: "No transcript found for the specified video ID",
+        note: "Checked both dedicated transcriptions collection and videos collection"
+      });
+    }
+  } catch (error) {
+    console.error("Error retrieving transcript:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to retrieve transcript", 
+      error: error.message 
+    });
+  }
+};
 const getVideoDetails = async (req, res) => {
   try {
     const { videoUrl, module_id, tags } = req.body;
@@ -330,7 +469,149 @@ const updateChannelProfileImageForVideo = async (req, res) => {
   }
 };
 
+const getQuizzesByYoutubeVideoId = async (req, res) => {
+  try {
+    const { youtubeVideoId } = req.params;
 
-module.exports = { getVideoDetails, getAllVideos,deleteVideo,getVideoDetailsByModuleId, 
-  getVideoWithQuizzes,updateVideoTags,  searchModulesBySkill,updateChannelProfileImageForVideo
+    if (!youtubeVideoId) {
+      return res.status(400).json({ error: "YouTube Video ID is required." });
+    }
+
+    // Find the video by YouTube Video ID
+    const video = await Video.findOne({ youtubeVideo_id: youtubeVideoId }).populate('quizzes');
+
+    if (!video) {
+      return res.status(404).json({ error: "Video not found." });
+    }
+
+    if (!video.quizzes || video.quizzes.length === 0) {
+      return res.status(404).json({ error: "No quizzes found for this video." });
+    }
+
+    // Extract and return only the mcqs array
+    const mcqsArray = video.quizzes.map(quiz => quiz.mcqs).flat();
+
+    return res.status(200).json(mcqsArray);
+  } catch (error) {
+    console.error("Error fetching quizzes by YouTube Video ID:", error.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const getIntroductionByYoutubeVideoId = async (req, res) => {
+  try {
+    const { youtubeVideoId } = req.params;
+
+    if (!youtubeVideoId) {
+      return res.status(400).json({ error: "YouTube Video ID is required." });
+    }
+
+    // Find the video by YouTube Video ID and populate the flashcards
+    const video = await Video.findOne({ youtubeVideo_id: youtubeVideoId }).populate({
+      path: 'flashcards',
+      model: 'FlashcardResponse',
+      select: 'section content'
+    });
+
+    if (!video) {
+      return res.status(404).json({ error: "Video not found." });
+    }
+
+    console.log("Video found:", video); // Log the video details
+
+    // Extract the introduction section from flashcards
+    const introductionFlashcard = video.flashcards.find(flashcard => flashcard.section === "introduction");
+
+    if (!introductionFlashcard) {
+      console.log("Flashcards available:", video.flashcards); // Log available flashcards
+      return res.status(404).json({ error: "Introduction not found for this video." });
+    }
+
+    return res.status(200).json({ introduction: introductionFlashcard.content });
+  } catch (error) {
+    console.error("Error fetching introduction by YouTube Video ID:", error.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const getKeyLearningByYoutubeVideoId = async (req, res) => {
+  try {
+    const { youtubeVideoId } = req.params;
+
+    if (!youtubeVideoId) {
+      return res.status(400).json({ error: "YouTube Video ID is required." });
+    }
+
+    // Find the video by YouTube Video ID and populate the flashcards
+    const video = await Video.findOne({ youtubeVideo_id: youtubeVideoId }).populate({
+      path: 'flashcards',
+      model: 'FlashcardResponse',
+      select: 'section content'
+    });
+
+    if (!video) {
+      return res.status(404).json({ error: "Video not found." });
+    }
+
+    // Extract the key learning section from flashcards
+    const keyLearningFlashcard = video.flashcards.find(flashcard => flashcard.section === "key_learnings");
+
+    if (!keyLearningFlashcard) {
+      return res.status(404).json({ error: "Key Learning not found for this video." });
+    }
+
+    return res.status(200).json({ keyLearning: keyLearningFlashcard.content });
+  } catch (error) {
+    console.error("Error fetching key learning by YouTube Video ID:", error.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const getExecutiveSummaryByYoutubeVideoId = async (req, res) => {
+  try {
+    const { youtubeVideoId } = req.params;
+
+    if (!youtubeVideoId) {
+      return res.status(400).json({ error: "YouTube Video ID is required." });
+    }
+
+    // Find the video by YouTube Video ID and populate the flashcards
+    const video = await Video.findOne({ youtubeVideo_id: youtubeVideoId }).populate({
+      path: 'flashcards',
+      model: 'FlashcardResponse',
+      select: 'section content'
+    });
+
+    if (!video) {
+      return res.status(404).json({ error: "Video not found." });
+    }
+
+    // Extract the executive summary section from flashcards
+    const executiveSummaryFlashcard = video.flashcards.find(flashcard => flashcard.section === "summary_points");
+
+    if (!executiveSummaryFlashcard) {
+      return res.status(404).json({ error: "Executive Summary not found for this video." });
+    }
+
+    return res.status(200).json({ executiveSummary: executiveSummaryFlashcard.content });
+  } catch (error) {
+    console.error("Error fetching executive summary by YouTube Video ID:", error.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+module.exports = { 
+  getVideoDetails, 
+  getAllVideos,
+  deleteVideo,
+  getVideoDetailsByModuleId, 
+  getVideoWithQuizzes,
+  updateVideoTags,  
+  searchModulesBySkill,
+  updateChannelProfileImageForVideo,
+  getQuizzesByYoutubeVideoId, 
+  getIntroductionByYoutubeVideoId, 
+  getKeyLearningByYoutubeVideoId,
+  getExecutiveSummaryByYoutubeVideoId,
+  getTranscriptionByVideoId // Add the new function to the exports
 };

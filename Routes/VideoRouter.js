@@ -1,6 +1,7 @@
 const express = require("express");
-const { getVideoDetails,getAllVideos,deleteVideo,getVideoDetailsByModuleId,updateVideoTags,
-    getVideoWithQuizzes,searchModulesBySkill,updateChannelProfileImageForVideo} = require("../Controller/VideoController");
+const { getVideoDetails,getAllVideos,deleteVideo,getVideoDetailsByModuleId,updateVideoTags,  getTranscriptionByVideoId ,
+
+    getVideoWithQuizzes,searchModulesBySkill,updateChannelProfileImageForVideo, getQuizzesByYoutubeVideoId, getIntroductionByYoutubeVideoId, getKeyLearningByYoutubeVideoId, getExecutiveSummaryByYoutubeVideoId } = require("../Controller/VideoController");
 const {authMiddleware}=require("../middleware/auth.middleware")
 const router = express.Router();
 
@@ -14,5 +15,10 @@ router.get("/getvideoByModuleId/:moduleId",authMiddleware,getVideoDetailsByModul
 router.get('/:videoId', getVideoWithQuizzes);
 router.put("/update/:videoId",updateVideoTags);
 router.put("/update-channel-image/:videoId", updateChannelProfileImageForVideo);
+router.get('/quizzes/:youtubeVideoId', getQuizzesByYoutubeVideoId);
+router.get('/introduction/:youtubeVideoId', getIntroductionByYoutubeVideoId);
+router.get('/key-learning/:youtubeVideoId', getKeyLearningByYoutubeVideoId);
+router.get('/executive-summary/:youtubeVideoId', getExecutiveSummaryByYoutubeVideoId);
+router.get('/transcription/:video_id', getTranscriptionByVideoId);
 
 module.exports = router;
