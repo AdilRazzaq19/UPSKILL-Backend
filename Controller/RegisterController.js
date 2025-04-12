@@ -71,34 +71,65 @@ const RegisterUser = async (req, res) => {
     }
 };
 const updateUserName = async (req, res) => {
-    try {
-      const userId = req.user._id; // assumes req.user is set for authenticated user
-      const { username } = req.body;
-  
-      if (!username || username.trim() === "") {
-        return res.status(400).json({ message: "Username is required." });
-      }
-  
-      // Update the username and return the updated document
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { username },
-        { new: true }
-      );
-  
-      if (!updatedUser) {
-        return res.status(404).json({ message: "User not found." });
-      }
-  
-      res.status(200).json({
-        message: "Username updated successfully.",
-        user: updatedUser,
-      });
-    } catch (error) {
-      console.error("Error updating user username:", error);
-      res.status(500).json({ message: "Internal server error." });
+  try {
+    const userId = req.user._id; // Assumes req.user is set for an authenticated user
+    const { username } = req.body;
+
+    if (!username || username.trim() === "") {
+      return res.status(400).json({ message: "Username is required." });
     }
-  };
+
+    // Retrieve the user document from the database.
+    const userDoc = await User.findById(userId);
+    if (!userDoc) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const authMethod = userDoc.authMethod || "local";
+
+    if (authMethod === "local") {
+      // For local users, update the username directly.
+      userDoc.username = username;
+    } else if (authMethod === "google") {
+      // For Google users, update the name inside google.userInfo.
+      if (!userDoc.google) {
+        userDoc.google = {};
+      }
+      if (!userDoc.google.userInfo) {
+        userDoc.google.userInfo = {};
+      }
+      userDoc.google.userInfo.name = username;
+      // Mark the nested path as modified so Mongoose will save the change.
+      userDoc.markModified("google");
+    } else if (authMethod === "apple") {
+      // For Apple users, update the name inside apple.userInfo.
+      if (!userDoc.apple) {
+        userDoc.apple = {};
+      }
+      if (!userDoc.apple.userInfo) {
+        userDoc.apple.userInfo = {};
+      }
+      userDoc.apple.userInfo.name = username;
+      // Mark the nested path as modified so Mongoose will save the change.
+      userDoc.markModified("apple");
+    } else {
+      // Fallback: update the local username field.
+      userDoc.username = username;
+    }
+
+    await userDoc.save();
+
+    res.status(200).json({
+      message: "Username updated successfully.",
+      user: userDoc,
+    });
+  } catch (error) {
+    console.error("Error updating user username:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+
   
   // Update the username for an admin
   const updateAdminName = async (req, res) => {
