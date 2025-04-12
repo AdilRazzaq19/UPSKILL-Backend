@@ -151,23 +151,59 @@ const retrieveData = async (req, res) => {
 
   const getAllUserProfiles = async (req, res) => {
     try {
-      // Find all onboarding records and populate with user details including "name"
+      // 1. Populate user_id with all possible name fields if your schema allows it.
+      //    But if your DB schema has no "name" field in the user doc, omit it.
       const allOnboardingData = await Onboarding.find({})
-        .populate("user_id", "username email name");
+        .populate("user_id", "username name email");
   
       if (!allOnboardingData || allOnboardingData.length === 0) {
         return res.status(404).json({ message: "No user profiles found" });
       }
   
-      // Transform the data to include username and email at the top level.
-      const profiles = allOnboardingData.map(profile => {
-        const profileData = profile.toObject();
-        
-        // Use either the "username" or "name" field, whichever is present.
-        profileData.username = profileData.user_id.username || profileData.user_id.name || "";
-        profileData.email = profileData.user_id.email || "";
-        
-        return profileData;
+      const profiles = allOnboardingData.map(profileDoc => {
+        // Convert the Mongoose document to a plain object
+        const profile = profileDoc.toObject();
+  
+        // Prepare a variable for username and email (or first name/last name if desired)
+        let username = "";
+        let email = "";
+  
+        // 2. If we have a local user doc, try to get username or name from there:
+        if (profile.user_id) {
+          username = profile.user_id.username 
+            || profile.user_id.name 
+            || "";
+          email = profile.user_id.email 
+            || "";
+        }
+  
+        // 3. If username is still empty, check if there's a Google provider object:
+        if (!username && profile.google) {
+          // For Google, you might have firstName, lastName, givenName, familyName, etc.
+          username = profile.google.givenName 
+            || profile.google.firstName 
+            || "";
+          // Optionally, combine firstName + lastName
+          // username = `${profile.google.firstName || ""} ${profile.google.lastName || ""}`.trim();
+          email = email || profile.google.email || "";
+        }
+  
+        // 4. If still empty, check if there's an Apple provider object:
+        if (!username && profile.apple) {
+          username = profile.apple.givenName
+            || profile.apple.firstName
+            || "";
+          email = email || profile.apple.email || "";
+        }
+  
+        // 5. Fall back to the existing top-level email if nothing else is set:
+        email = email || profile.email || "";
+  
+        // 6. Assign these normalized fields back to the profile object you want to return
+        profile.username = username;
+        profile.email = email;
+  
+        return profile;
       });
   
       res.status(200).json(profiles);
@@ -176,6 +212,7 @@ const retrieveData = async (req, res) => {
       res.status(500).json({ message: "Internal Server Error" });
     }
   };
+  
   
 
 module.exports = { createOnBoarding, retrieveData, updateOnboarding, getAllUserProfiles};
