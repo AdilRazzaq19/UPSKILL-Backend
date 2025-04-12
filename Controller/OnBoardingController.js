@@ -208,8 +208,13 @@ const retrieveData = async (req, res) => {
   };  
 
   const getAllUserProfiles = async (req, res) => {
+    // Only allow admin access
+    if (req.userRole !== "admin") {
+      return res.status(403).json({ message: "Access denied: Admins only." });
+    }
+  
     try {
-      // Include additional fields for social auth.
+      // Include additional fields for social authentication.
       const allOnboardingData = await Onboarding.find({})
         .populate("user_id", "username name authMethod google apple email");
   
