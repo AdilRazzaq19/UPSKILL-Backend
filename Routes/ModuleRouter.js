@@ -1,5 +1,6 @@
 const express = require("express");
 const { createModule, getModules, getModuleById, updateModule,updateModuleName, deleteModule,getModulesBySectionId,getModuleDetailsByUniqueModuleId, getAllModulesForAdmin, updateModuleforAdmin,} = require("../Controller/ModuleController");
+const { authMiddleware } = require("../middleware/auth.middleware");
 const router = express.Router();
 
 router.post("/create",createModule);
@@ -10,6 +11,6 @@ router.put("/update/:id", updateModule);
 router.delete("/delete/:id", deleteModule);
 router.get("/getModuleByUniqueId", getModuleDetailsByUniqueModuleId);
 router.put('/name-update/:moduleId', updateModuleName);
-router.get("/getAllModulesForAdmin", getAllModulesForAdmin);
+router.get("/getAllModulesForAdmin", authMiddleware,getAllModulesForAdmin);
 router.put("/updateModuleforAdmin/:moduleId", updateModuleforAdmin);
 module.exports = router;
