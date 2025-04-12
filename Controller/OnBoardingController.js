@@ -288,8 +288,142 @@ const retrieveData = async (req, res) => {
     }
   };
   
+  const deleteUserAndOnboarding = async (req, res) => {
+    // Verify admin access
+    if (req.userRole !== "admin") {
+      return res.status(403).json({ message: "Access denied: Admins only." });
+    }
+    try {
+      const { id } = req.params; // user id to be deleted
+  
+      // Delete the onboarding data for the user.
+      // Even if there is no onboarding data, we continue.
+      await Onboarding.deleteOne({ user_id: id });
+  
+      // Then delete the User document itself.
+      const deletedUser = await User.findByIdAndDelete(id);
+      if (!deletedUser) {
+        return res.status(404).json({ message: "User not found." });
+      }
+      
+      res.status(200).json({ message: "User and onboarding deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting user and onboarding:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  };
   
   
+  const updateUserProfile = async (req, res) => {
+    try {
+      // Extract the target user ID from the request body.
+      // This ID represents the user whose profile we want to update.
+      const targetUserId = req.body.user_id;
+      if (!targetUserId) {
+        return res.status(400).json({ message: "Target user id is required." });
+      }
   
+      const {
+        username,
+        current_role,
+        industry,
+        department,
+        highest_education,
+        role,
+        company_Size,
+        frequency_at_work,
+        AI_level,
+        goals,
+        interests,
+        challenge,
+        preffered_learning_style,
+        weekly_commitment,
+        how_often,
+      } = req.body;
+  
+      // Validate username presence.
+      if (!username || username.trim() === "") {
+        return res.status(400).json({ message: "Username is required." });
+      }
+  
+      // --------------------------------------------
+      // Step 1: Update the User Document (username)
+      // --------------------------------------------
+      const userDoc = await User.findById(targetUserId);
+      if (!userDoc) {
+        return res.status(404).json({ message: "User not found." });
+      }
+  
+      // Update based on authentication method.
+      const authMethod = userDoc.authMethod || "local";
+      if (authMethod === "local") {
+        userDoc.username = username;
+      } else if (authMethod === "google") {
+        if (!userDoc.google) {
+          userDoc.google = {};
+        }
+        if (!userDoc.google.userInfo) {
+          userDoc.google.userInfo = {};
+        }
+        userDoc.google.userInfo.name = username;
+        userDoc.markModified("google");
+      } else if (authMethod === "apple") {
+        if (!userDoc.apple) {
+          userDoc.apple = {};
+        }
+        if (!userDoc.apple.userInfo) {
+          userDoc.apple.userInfo = {};
+        }
+        userDoc.apple.userInfo.name = username;
+        userDoc.markModified("apple");
+      } else {
+        userDoc.username = username;
+      }
+  
+      await userDoc.save();
+  
+      // --------------------------------------------
+      // Step 2: Update the Onboarding Document
+      // --------------------------------------------
+      const onboardingData = await Onboarding.findOne({ user_id: targetUserId });
+      if (!onboardingData) {
+        return res.status(404).json({ message: "Onboarding data not found." });
+      }
+  
+      // Optional validations for goals and interests.
+      if (interests && interests.length > 5) {
+        return res.status(400).json({ message: "Interests cannot exceed 5 items." });
+      }
+      if (goals && goals.length > 3) {
+        return res.status(400).json({ message: "Goals cannot exceed 3 items." });
+      }
+  
+      if (current_role !== undefined) onboardingData.current_role = current_role;
+      if (industry !== undefined) onboardingData.industry = industry;
+      if (department !== undefined) onboardingData.department = department;
+      if (highest_education !== undefined) onboardingData.highest_education = highest_education;
+      if (role !== undefined) onboardingData.role = !!role;
+      if (company_Size !== undefined) onboardingData.company_Size = company_Size;
+      if (frequency_at_work !== undefined) onboardingData.frequency_at_work = frequency_at_work;
+      if (AI_level !== undefined) onboardingData.AI_level = AI_level;
+      if (goals !== undefined) onboardingData.goals = goals;
+      if (interests !== undefined) onboardingData.interests = interests;
+      if (challenge !== undefined) onboardingData.challenge = challenge;
+      if (preffered_learning_style !== undefined) onboardingData.preffered_learning_style = preffered_learning_style;
+      if (weekly_commitment !== undefined) onboardingData.weekly_commitment = weekly_commitment;
+      if (how_often !== undefined) onboardingData.how_often = how_often;
+  
+      await onboardingData.save();
+  
+      res.status(200).json({
+        message: "User profile updated successfully",
+        user: userDoc,
+        onboarding: onboardingData,
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  };
 
-module.exports = { createOnBoarding, retrieveData, updateOnboarding, getAllUserProfiles};
+module.exports = { createOnBoarding, retrieveData, updateOnboarding, getAllUserProfiles, deleteUserAndOnboarding, updateUserProfile};
