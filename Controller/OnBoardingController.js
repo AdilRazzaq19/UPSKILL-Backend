@@ -71,24 +71,82 @@ const createOnBoarding = async (req, res) => {
 const retrieveData = async (req, res) => {
   try {
     const user_id = req.user._id;
-
+    
     const onboardingData = await Onboarding.findOne({ user_id })
-      .populate("user_id", "username email name");
-
+      .populate("user_id", "username email name authMethod google apple");
+    
     if (!onboardingData) {
       return res.status(404).json({ message: "Onboarding data not found" });
     }
-
+    
     const data = onboardingData.toObject();
-    data.username = data.user_id.username || data.user_id.name || "";
-    data.email = data.user_id.email || "";
-
+    
+    // Initialize these fields with empty strings
+    let username = "";
+    let email = "";
+    
+    // Check if the populated user_id is available before accessing its properties
+    if (data.user_id) {
+      // Always get the email from the user document
+      email = data.user_id.email || "";
+      const authMethod = data.user_id.authMethod;
+      
+      if (authMethod === "local") {
+        // For local users, use the username if available; otherwise, fallback to name
+        if (data.user_id.username && data.user_id.username.trim() !== "") {
+          username = data.user_id.username;
+        } else if (data.user_id.name && data.user_id.name.trim() !== "") {
+          username = data.user_id.name;
+        }
+      } else if (authMethod === "google") {
+        // For Google users, use google.userInfo
+        if (data.user_id.google && data.user_id.google.userInfo) {
+          const googleInfo = data.user_id.google.userInfo;
+          if (googleInfo.name && googleInfo.name.trim() !== "") {
+            username = googleInfo.name;
+          } else {
+            // Combine givenName and familyName as a fallback
+            const given = googleInfo.givenName || "";
+            const family = googleInfo.familyName || "";
+            username = [given, family].filter(part => part.trim() !== "").join(" ");
+          }
+        }
+      } else if (authMethod === "apple") {
+        // For Apple users, try to extract a name from apple data
+        if (data.user_id.apple) {
+          const appleData = data.user_id.apple;
+          if (appleData.userInfo && appleData.userInfo.name && appleData.userInfo.name.trim() !== "") {
+            username = appleData.userInfo.name;
+          } else if (appleData.fullName && appleData.fullName.givenName && appleData.fullName.givenName.trim() !== "") {
+            const given = appleData.fullName.givenName;
+            const family = appleData.fullName.familyName || "";
+            username = [given, family].filter(part => part.trim() !== "").join(" ");
+          }
+        }
+        // If still no username, derive it from the email
+        if (!username && email) {
+          const localPart = email.split("@")[0];
+          username = localPart.replace(/[\._]/g, " ");
+          username = username.charAt(0).toUpperCase() + username.slice(1);
+        }
+      } else {
+        // Default fallback for any other auth method
+        username = data.user_id.username || data.user_id.name || "";
+      }
+    }
+    
+    // Attach the normalized fields to the data object
+    data.username = username;
+    data.email = email;
+    
+    // Return the data with the same structure as before
     res.status(200).json(data);
   } catch (error) {
     console.error("Error retrieving onboarding data:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
   
   const updateOnboarding = async (req, res) => {
@@ -151,55 +209,67 @@ const retrieveData = async (req, res) => {
 
   const getAllUserProfiles = async (req, res) => {
     try {
-      // 1. Populate user_id with all possible name fields if your schema allows it.
-      //    But if your DB schema has no "name" field in the user doc, omit it.
+      // Include additional fields for social auth.
       const allOnboardingData = await Onboarding.find({})
-        .populate("user_id", "username name email");
+        .populate("user_id", "username name authMethod google apple email");
   
       if (!allOnboardingData || allOnboardingData.length === 0) {
         return res.status(404).json({ message: "No user profiles found" });
       }
   
-      const profiles = allOnboardingData.map(profileDoc => {
-        // Convert the Mongoose document to a plain object
-        const profile = profileDoc.toObject();
+      const profiles = allOnboardingData.map(doc => {
+        const profile = doc.toObject();
   
-        // Prepare a variable for username and email (or first name/last name if desired)
         let username = "";
         let email = "";
   
-        // 2. If we have a local user doc, try to get username or name from there:
         if (profile.user_id) {
-          username = profile.user_id.username 
-            || profile.user_id.name 
-            || "";
-          email = profile.user_id.email 
-            || "";
+          // Always get the email from the user document.
+          email = profile.user_id.email || "";
+          const authMethod = profile.user_id.authMethod;
+  
+          if (authMethod === "local") {
+            // For local users, use the username if available; otherwise, fallback to name.
+            if (profile.user_id.username && profile.user_id.username.trim() !== "") {
+              username = profile.user_id.username;
+            } else if (profile.user_id.name && profile.user_id.name.trim() !== "") {
+              username = profile.user_id.name;
+            }
+          } else if (authMethod === "google") {
+            // For Google users, use google.userInfo.
+            if (profile.user_id.google && profile.user_id.google.userInfo) {
+              const googleInfo = profile.user_id.google.userInfo;
+              if (googleInfo.name && googleInfo.name.trim() !== "") {
+                username = googleInfo.name;
+              } else {
+                // Combine givenName and familyName as a fallback.
+                const given = googleInfo.givenName || "";
+                const family = googleInfo.familyName || "";
+                username = [given, family].filter(part => part.trim() !== "").join(" ");
+              }
+            }
+          } else if (authMethod === "apple") {
+            // For Apple users, try to extract a name from apple data.
+            if (profile.user_id.apple) {
+              const appleData = profile.user_id.apple;
+              if (appleData.userInfo && appleData.userInfo.name && appleData.userInfo.name.trim() !== "") {
+                username = appleData.userInfo.name;
+              } else if (appleData.fullName && appleData.fullName.givenName && appleData.fullName.givenName.trim() !== "") {
+                const given = appleData.fullName.givenName;
+                const family = appleData.fullName.familyName || "";
+                username = [given, family].filter(part => part.trim() !== "").join(" ");
+              }
+            }
+            // If still no username, derive it from the email.
+            if (!username && email) {
+              const localPart = email.split("@")[0];
+              username = localPart.replace(/[\._]/g, " ");
+              username = username.charAt(0).toUpperCase() + username.slice(1);
+            }
+          }
         }
   
-        // 3. If username is still empty, check if there's a Google provider object:
-        if (!username && profile.google) {
-          // For Google, you might have firstName, lastName, givenName, familyName, etc.
-          username = profile.google.givenName 
-            || profile.google.firstName 
-            || "";
-          // Optionally, combine firstName + lastName
-          // username = `${profile.google.firstName || ""} ${profile.google.lastName || ""}`.trim();
-          email = email || profile.google.email || "";
-        }
-  
-        // 4. If still empty, check if there's an Apple provider object:
-        if (!username && profile.apple) {
-          username = profile.apple.givenName
-            || profile.apple.firstName
-            || "";
-          email = email || profile.apple.email || "";
-        }
-  
-        // 5. Fall back to the existing top-level email if nothing else is set:
-        email = email || profile.email || "";
-  
-        // 6. Assign these normalized fields back to the profile object you want to return
+        // Attach normalized fields.
         profile.username = username;
         profile.email = email;
   
@@ -212,6 +282,8 @@ const retrieveData = async (req, res) => {
       res.status(500).json({ message: "Internal Server Error" });
     }
   };
+  
+  
   
   
 
