@@ -6,6 +6,9 @@ const UserProgress = require("../Models/userProgress");
 const Video = require('../Models/Video'); // Adjust path if needed
 
 const createModule = async (req, res) => {
+  if (req.userRole !== "admin") {
+    return res.status(403).json({ message: "Access denied: Admins only." });
+  }
     try {
         const { unique_ModuleID,name, section_id, theme_id} = req.body;
 
@@ -188,6 +191,9 @@ const updateModule = async (req, res) => {
 };
 
 const deleteModule = async (req, res) => {
+  if (req.userRole !== "admin") {
+    return res.status(403).json({ message: "Access denied: Admins only." });
+  }
   try {
     const { id } = req.params;
     // This triggers the post hook on deletion.
@@ -278,8 +284,12 @@ const updateModuleName = async (req, res) => {
 
 const getAllModulesForAdmin = async (req, res) => {
   try {
-    // Step 1: Get basic module data with video, section and theme info.
-    // Nested population is used to populate the video's learnedSkills field.
+    // Check if the authenticated user is an admin.
+    if (req.userRole !== "admin") {
+      return res.status(403).json({ message: "Access denied: Admins only." });
+    }
+
+    // Step 1: Get basic module data with video, section, and theme info.
     const modules = await Module.find()
       .populate({
         path: "section_id",
@@ -303,7 +313,6 @@ const getAllModulesForAdmin = async (req, res) => {
     const moduleIds = modules.map(module => module._id);
 
     // Step 2: Get completion counts.
-    // Unwind the completed_modules array and group by the module_id inside it.
     const completionCounts = await UserProgress.aggregate([
       { $unwind: "$completed_modules" },
       {
@@ -322,11 +331,10 @@ const getAllModulesForAdmin = async (req, res) => {
     // Create a lookup map for faster access.
     const completionMap = {};
     completionCounts.forEach(item => {
-      // The _id here is a module_id.
       completionMap[item._id.toString()] = item.count;
     });
 
-    // Step 3: Combine all data.
+    // Step 3: Combine data.
     const moduleData = modules.map(module => {
       const moduleId = module._id.toString();
       return {
@@ -354,7 +362,6 @@ const getAllModulesForAdmin = async (req, res) => {
               publishDate: module.video.publish_date,
               likesCount: module.video.likes_count || 0,
               viewsCount: module.video.views_count || 0,
-              // Use the populated learnedSkills field.
               learnedSkills: module.video.learnedSkills
                 ? module.video.learnedSkills.map(skill => ({
                     _id: skill._id,
@@ -367,7 +374,6 @@ const getAllModulesForAdmin = async (req, res) => {
       };
     });
 
-    // Return only the analytics data.
     res.status(200).json(moduleData);
   } catch (error) {
     console.error("Error retrieving module data:", error);
@@ -380,7 +386,12 @@ const getAllModulesForAdmin = async (req, res) => {
 
 const updateModuleforAdmin = async (req, res) => {
   try {
-    // Get the module ID from URL path parameter
+    // Check if the authenticated user is an admin.
+    if (req.userRole !== "admin") {
+      return res.status(403).json({ message: "Access denied: Admins only." });
+    }
+    
+    // Get the module ID from URL path parameter.
     const { moduleId } = req.params;
     if (!moduleId) {
       return res.status(400).json({ message: "Module ID is required." });
@@ -388,22 +399,21 @@ const updateModuleforAdmin = async (req, res) => {
 
     const updateData = req.body;
 
-    // Find the module document by ID
+    // Find the module document by ID.
     const moduleDoc = await Module.findById(moduleId);
     if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found." });
     }
 
-    // Update top-level module fields
+    // Update top-level module fields.
     if (updateData.moduleName) moduleDoc.name = updateData.moduleName;
     if (updateData.themeName) moduleDoc.themeName = updateData.themeName;
     if (updateData.themeId) moduleDoc.theme_id = updateData.themeId;
     if (updateData.sectionName) moduleDoc.sectionName = updateData.sectionName;
     if (updateData.sectionId) moduleDoc.section_id = updateData.sectionId;
 
-    // Check if the update includes video fields
+    // Check if the update includes video fields.
     if (updateData.video) {
-      // If the module already has an associated video, update its fields.
       if (moduleDoc.video) {
         try {
           const videoDoc = await Video.findById(moduleDoc.video);
@@ -412,17 +422,17 @@ const updateModuleforAdmin = async (req, res) => {
               videoDoc.video_url = updateData.video.videoUrl;
             if (updateData.video.learnedSkills)
               videoDoc.learnedSkills = updateData.video.learnedSkills;
-            // Optionally, update other video fields if needed.
+            // Optionally update other video fields.
             await videoDoc.save();
           }
         } catch (videoError) {
           console.error("Error updating video:", videoError);
-          // Continue with module update even if video update fails
+          // Continue with module update even if video update fails.
         }
       }
     }
 
-    // Save the updated module
+    // Save the updated module.
     await moduleDoc.save();
 
     return res.status(200).json({
@@ -437,6 +447,7 @@ const updateModuleforAdmin = async (req, res) => {
     });
   }
 };
+
 
 module.exports = { 
   createModule, 
