@@ -831,7 +831,7 @@ const getUserDailyPointsHeat = async (req, res) => {
 const userRanking = async (req, res) => {
   try {
     const progressList = await UserProgress.find({})
-      .populate('user_id', 'username')
+      .populate('user_id', 'username name email authMethod google apple')
       .sort({ points: -1 });
       
     // Filter out records where user_id is null or missing _id.
@@ -860,9 +860,57 @@ const userRanking = async (req, res) => {
         }
       }
 
+      // Extract username using proper fallbacks based on auth method
+      let username = "";
+      const user = current.user_id;
+      
+      if (user) {
+        const authMethod = user.authMethod;
+        
+        if (authMethod === "local") {
+          // For local users, use username if available, otherwise name
+          username = user.username || user.name || "";
+        } else if (authMethod === "google" && user.google && user.google.userInfo) {
+          // For Google users
+          const googleInfo = user.google.userInfo;
+          if (googleInfo.name) {
+            username = googleInfo.name;
+          } else {
+            const given = googleInfo.givenName || "";
+            const family = googleInfo.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+        } else if (authMethod === "apple" && user.apple) {
+          // For Apple users
+          const appleData = user.apple;
+          if (appleData.userInfo && appleData.userInfo.name) {
+            username = appleData.userInfo.name;
+          } else if (appleData.fullName && appleData.fullName.givenName) {
+            const given = appleData.fullName.givenName;
+            const family = appleData.fullName.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+          
+          // If still no username, derive from email
+          if (!username && user.email) {
+            const localPart = user.email.split("@")[0];
+            username = localPart.replace(/[\._]/g, " ");
+            username = username.charAt(0).toUpperCase() + username.slice(1);
+          }
+        } else {
+          // Default fallback
+          username = user.username || user.name || "";
+        }
+        
+        // Final fallback - if still no username, use email or User ID
+        if (!username || username.trim() === "") {
+          username = user.email ? user.email.split("@")[0] : `User ${user._id.toString().slice(-4)}`;
+        }
+      }
+
       rankedList.push({
         user_id: current.user_id._id,
-        username: current.user_id.username,
+        username: username, // Use our extracted username
         points: current.points,
         rank: ordinalRank,
         percentileRank: percentile
@@ -883,7 +931,6 @@ const userRanking = async (req, res) => {
   }
 };
 
-
 const userIndividualRanking = async (req, res) => {
   try {
     const user_id = req.user._id;
@@ -893,7 +940,7 @@ const userIndividualRanking = async (req, res) => {
     }
     
     const progressList = await UserProgress.find({})
-      .populate('user_id', 'username')
+      .populate('user_id', 'username name email authMethod google apple')
       .sort({ points: -1 });
       
     // Filter out records with null user_id to prevent errors.
@@ -904,6 +951,7 @@ const userIndividualRanking = async (req, res) => {
     let lastPoints = null;
     let lastOrdinalRank = 0;
     let lastPercentile = 0;
+    
     for (let i = 0; i < totalUsers; i++) {
       const current = validProgressList[i];
       let ordinalRank, percentile;
@@ -921,9 +969,57 @@ const userIndividualRanking = async (req, res) => {
         }
       }
   
+      // Extract username using proper fallbacks based on auth method
+      let username = "";
+      const user = current.user_id;
+      
+      if (user) {
+        const authMethod = user.authMethod;
+        
+        if (authMethod === "local") {
+          // For local users, use username if available, otherwise name
+          username = user.username || user.name || "";
+        } else if (authMethod === "google" && user.google && user.google.userInfo) {
+          // For Google users
+          const googleInfo = user.google.userInfo;
+          if (googleInfo.name) {
+            username = googleInfo.name;
+          } else {
+            const given = googleInfo.givenName || "";
+            const family = googleInfo.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+        } else if (authMethod === "apple" && user.apple) {
+          // For Apple users
+          const appleData = user.apple;
+          if (appleData.userInfo && appleData.userInfo.name) {
+            username = appleData.userInfo.name;
+          } else if (appleData.fullName && appleData.fullName.givenName) {
+            const given = appleData.fullName.givenName;
+            const family = appleData.fullName.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+          
+          // If still no username, derive from email
+          if (!username && user.email) {
+            const localPart = user.email.split("@")[0];
+            username = localPart.replace(/[\._]/g, " ");
+            username = username.charAt(0).toUpperCase() + username.slice(1);
+          }
+        } else {
+          // Default fallback
+          username = user.username || user.name || "";
+        }
+        
+        // Final fallback - if still no username, use email or User ID
+        if (!username || username.trim() === "") {
+          username = user.email ? user.email.split("@")[0] : `User ${user._id.toString().slice(-4)}`;
+        }
+      }
+  
       rankedList.push({
         user_id: current.user_id._id,
-        username: current.user_id.username,
+        username: username, // Use our extracted username
         points: current.points,
         rank: ordinalRank,
         percentileRank: percentile
@@ -933,6 +1029,7 @@ const userIndividualRanking = async (req, res) => {
       lastOrdinalRank = ordinalRank;
       lastPercentile = percentile;
     }
+    
     const userRankData = rankedList.find(
       (item) => item.user_id.toString() === user_id.toString()
     );
@@ -957,7 +1054,7 @@ const userCompleteRanking = async (req, res) => {
     const user_id = req.user._id;
 
     const progressList = await UserProgress.find({})
-      .populate("user_id", "username")
+      .populate("user_id", "username name email authMethod google apple")
       .sort({ points: -1 });
 
     // Filter out records with null user_id to prevent errors.
@@ -998,20 +1095,72 @@ const userCompleteRanking = async (req, res) => {
           percentile = Math.ceil(((i + 1) / totalUsers) * 100);
         }
       }
+      
+      // Extract username using proper fallbacks based on auth method
+      let username = "";
+      const user = current.user_id;
+      
+      if (user) {
+        const authMethod = user.authMethod;
+        
+        if (authMethod === "local") {
+          // For local users, use username if available, otherwise name
+          username = user.username || user.name || "";
+        } else if (authMethod === "google" && user.google && user.google.userInfo) {
+          // For Google users
+          const googleInfo = user.google.userInfo;
+          if (googleInfo.name) {
+            username = googleInfo.name;
+          } else {
+            const given = googleInfo.givenName || "";
+            const family = googleInfo.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+        } else if (authMethod === "apple" && user.apple) {
+          // For Apple users
+          const appleData = user.apple;
+          if (appleData.userInfo && appleData.userInfo.name) {
+            username = appleData.userInfo.name;
+          } else if (appleData.fullName && appleData.fullName.givenName) {
+            const given = appleData.fullName.givenName;
+            const family = appleData.fullName.familyName || "";
+            username = [given, family].filter(part => part && part.trim()).join(" ");
+          }
+          
+          // If still no username, derive from email
+          if (!username && user.email) {
+            const localPart = user.email.split("@")[0];
+            username = localPart.replace(/[\._]/g, " ");
+            username = username.charAt(0).toUpperCase() + username.slice(1);
+          }
+        } else {
+          // Default fallback
+          username = user.username || user.name || "";
+        }
+        
+        // Final fallback - if still no username, use email or User ID
+        if (!username || username.trim() === "") {
+          username = user.email ? user.email.split("@")[0] : `User ${user._id.toString().slice(-4)}`;
+        }
+      }
+      
       overallRankedList.push({
         user_id: current.user_id._id,
-        username: current.user_id.username,
+        username: username, // Use our extracted username
         points: current.points,
         rank: ordinalRank,
         percentileRank: percentile
       });
+      
       lastPoints = current.points;
       lastOrdinalRank = ordinalRank;
       lastPercentile = percentile;
     }
+    
     const overallUserData = overallRankedList.find(
       item => item.user_id.toString() === user_id.toString()
     );
+    
     if (!overallUserData) {
       return res.status(404).json({ message: "User not found in overall rankings." });
     }
@@ -1038,6 +1187,7 @@ const userCompleteRanking = async (req, res) => {
     const totalIndustry = industryList.length;
     let industryRankedList = [];
     lastPoints = null; lastOrdinalRank = 0; lastPercentile = 0;
+    
     for (let i = 0; i < totalIndustry; i++) {
       const current = industryList[i];
       let ordinalRank, percentile;
@@ -1053,20 +1203,29 @@ const userCompleteRanking = async (req, res) => {
           percentile = Math.ceil(((i + 1) / totalIndustry) * 100);
         }
       }
+      
+      // Find the matching user in the overallRankedList to get the username
+      const userEntry = overallRankedList.find(item => 
+        item.user_id.toString() === current.user_id._id.toString()
+      );
+      
       industryRankedList.push({
         user_id: current.user_id._id,
-        username: current.user_id.username,
+        username: userEntry ? userEntry.username : "Unknown User",
         points: current.points,
         rank: ordinalRank,
         percentileRank: percentile
       });
+      
       lastPoints = current.points;
       lastOrdinalRank = ordinalRank;
       lastPercentile = percentile;
     }
+    
     const industryUserData = industryRankedList.find(
       item => item.user_id.toString() === user_id.toString()
     );
+    
     if (!industryUserData) {
       return res.status(404).json({ message: "User not found in industry rankings." });
     }
@@ -1079,6 +1238,7 @@ const userCompleteRanking = async (req, res) => {
     const totalDepartment = departmentList.length;
     let departmentRankedList = [];
     lastPoints = null; lastOrdinalRank = 0; lastPercentile = 0;
+    
     for (let i = 0; i < totalDepartment; i++) {
       const current = departmentList[i];
       let ordinalRank, percentile;
@@ -1094,20 +1254,29 @@ const userCompleteRanking = async (req, res) => {
           percentile = Math.ceil(((i + 1) / totalDepartment) * 100);
         }
       }
+      
+      // Find the matching user in the overallRankedList to get the username
+      const userEntry = overallRankedList.find(item => 
+        item.user_id.toString() === current.user_id._id.toString()
+      );
+      
       departmentRankedList.push({
         user_id: current.user_id._id,
-        username: current.user_id.username,
+        username: userEntry ? userEntry.username : "Unknown User",
         points: current.points,
         rank: ordinalRank,
         percentileRank: percentile
       });
+      
       lastPoints = current.points;
       lastOrdinalRank = ordinalRank;
       lastPercentile = percentile;
     }
+    
     const departmentUserData = departmentRankedList.find(
       item => item.user_id.toString() === user_id.toString()
     );
+    
     if (!departmentUserData) {
       return res.status(404).json({ message: "User not found in department rankings." });
     }
