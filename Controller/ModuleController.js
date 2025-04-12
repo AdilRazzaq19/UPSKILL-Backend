@@ -196,7 +196,7 @@ const deleteModule = async (req, res) => {
   }
   try {
     const { id } = req.params;
-    // This triggers the post hook on deletion.
+    // This triggers any post hook on deletion.
     const deletedModule = await Module.findByIdAndDelete(id);
     if (!deletedModule) {
       return res.status(404).json({ message: "Module not found." });

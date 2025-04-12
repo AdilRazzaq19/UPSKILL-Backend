@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
-const Module = require("../Models/Module");
 
 const VideoSchema = new Schema({
   youtubeVideo_id: {
@@ -62,9 +61,9 @@ const VideoSchema = new Schema({
     type: Number,
     default: 0,
   },
-  tags:{
-    type:Array,
-    required:true
+  tags: {
+    type: Array,
+    required: true
   },
   module_id: {
     type: Schema.Types.ObjectId,
@@ -73,7 +72,7 @@ const VideoSchema = new Schema({
   quizzes: [{
     type: Schema.Types.ObjectId,
     ref: "VideoQuiz"
-  }],  
+  }],
   flashcards: [{
     type: Schema.Types.ObjectId,
     ref: "FlashcardResponse"
@@ -107,7 +106,8 @@ VideoSchema.post('findOneAndDelete', async function(deletedVideo) {
     }
     // Cascade deletion for flashcards.
     if (deletedVideo.flashcards && deletedVideo.flashcards.length > 0) {
-      await mongoose.model("Flashcard").deleteMany({ _id: { $in: deletedVideo.flashcards } });
+      // FIX: Use the correct model name "FlashcardResponse"
+      await mongoose.model("FlashcardResponse").deleteMany({ _id: { $in: deletedVideo.flashcards } });
     }
   }
 });
