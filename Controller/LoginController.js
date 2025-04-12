@@ -22,32 +22,46 @@ const verifyToken = (token) => {
 
 const loginAdmin = async (req, res) => {
     try {
-        const { email, password, token } = req.body;
-        const admin = await Admin.findOne({ email });
-
-        if (!admin) return res.status(401).json({ message: "Email or password is incorrect" });
-
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) return res.status(401).json({ message: "Email or password is incorrect" });
-
-        if (!token) {
-            const newToken = generateToken(admin._id, "admin");
-            return res.status(200).json({ message: "Admin logged in successfully", token: newToken });
-        }
-
+      const { email, password, token } = req.body;
+      const admin = await Admin.findOne({ email });
+  
+      if (!admin)
+        return res.status(401).json({ message: "Email or password is incorrect" });
+  
+      const isMatch = await bcrypt.compare(password, admin.password);
+      if (!isMatch)
+        return res.status(401).json({ message: "Email or password is incorrect" });
+  
+      let newToken;
+      if (!token) {
+        newToken = generateToken(admin._id, "admin");
+      } else {
         const decoded = verifyToken(token);
         if (decoded && decoded.userId === admin._id.toString()) {
-            return res.status(200).json({ message: "Admin logged in successfully", token });
+          newToken = token;
+        } else {
+          newToken = generateToken(admin._id, "admin");
         }
-
-        const newToken = generateToken(admin._id, "admin");
-        res.status(200).json({ message: "Admin logged in successfully", token: newToken });
-
+      }
+  
+      // Exclude sensitive fields like password before returning.
+      const adminData = admin.toObject();
+      delete adminData.password;
+  
+      // Include the role in the admin response.
+      adminData.role = "admin";
+  
+      res.status(200).json({
+        message: "Admin logged in successfully",
+        token: newToken,
+        admin: adminData
+      });
     } catch (error) {
-        console.error("Error in Admin login:", error);
-        res.status(500).json({ message: "Internal server error" });
+      console.error("Error in Admin login:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
-};
+  };
+  
  
 const loginUser = async (req, res) => {
     try {
