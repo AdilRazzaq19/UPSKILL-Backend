@@ -55,10 +55,6 @@ const OnboardingSchema = new Schema({
     type: String,
     required: true,
   },
-  preffered_learning_style: {
-    type: String,
-    required: true,
-  },
   weekly_commitment: {
     type: String,
     required: true,

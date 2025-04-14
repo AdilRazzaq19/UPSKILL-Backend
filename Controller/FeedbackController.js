@@ -200,5 +200,34 @@ const submitFeedback = async (req, res) => {
     return res.status(500).json({ message: "Internal server error." });
   }
 };
+const getAllFeedback = async (req, res) => {
+  try {
+    // Log the user information for debugging
+    console.log("User in request:", req.user);
+    console.log("User role:", req.user ? req.user.role : 'No user role');
+    
+    // Check for admin authorization
+    // The auth middleware may be adding the user info in various ways
+    const isAdmin = 
+      (req.user && req.user.role === 'admin') || 
+      (req.userRole === 'admin') || 
+      (req.user && req.user.isAdmin) ||
+      (req.auth && req.auth.role === 'admin');
+    
+    if (!isAdmin) {
+      console.log("Access denied: User is not admin");
+      return res.status(403).json({ message: "Access denied. Admin privileges required." });
+    }
 
-module.exports = { submitFeedback };
+    const feedback = await Feedback.find()
+      .populate('user_id', 'name email') // Include basic user info
+      .populate('module_id', 'unique_ModuleID moduleName') // Include basic module info
+      .sort({ date_of_feedback: -1 }); // Sort by date, newest first
+
+    return res.status(200).json(feedback);
+  } catch (error) {
+    console.error("Error getting all feedback:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+module.exports = { submitFeedback, getAllFeedback };
