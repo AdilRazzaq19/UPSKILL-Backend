@@ -15,7 +15,7 @@ const createOnBoarding = async (req, res) => {
       goals,
       interests,
       challenge,
-      preffered_learning_style,
+      // preffered_learning_style,
       weekly_commitment,
       how_often,
     } = req.body;
@@ -49,7 +49,7 @@ const createOnBoarding = async (req, res) => {
       goals,
       interests,
       challenge,
-      preffered_learning_style,
+      // preffered_learning_style,
       weekly_commitment,
       how_often,
     });
@@ -168,7 +168,7 @@ const retrieveData = async (req, res) => {
         goals,
         interests,
         challenge,
-        preffered_learning_style,
+        // preffered_learning_style,
         weekly_commitment,
         how_often,
       } = req.body;
@@ -191,7 +191,7 @@ const retrieveData = async (req, res) => {
       if (goals !== undefined) onboardingData.goals = goals;
       if (interests !== undefined) onboardingData.interests = interests;
       if (challenge !== undefined) onboardingData.challenge = challenge;
-      if (preffered_learning_style !== undefined) onboardingData.preffered_learning_style = preffered_learning_style;
+      // if (preffered_learning_style !== undefined) onboardingData.preffered_learning_style = preffered_learning_style;
       if (weekly_commitment !== undefined) onboardingData.weekly_commitment = weekly_commitment;
       if (how_often !== undefined) onboardingData.how_often = how_often;
   
@@ -336,7 +336,7 @@ const retrieveData = async (req, res) => {
         goals,
         interests,
         challenge,
-        preffered_learning_style,
+        // preffered_learning_style,
         weekly_commitment,
         how_often,
       } = req.body;
@@ -409,7 +409,7 @@ const retrieveData = async (req, res) => {
       if (goals !== undefined) onboardingData.goals = goals;
       if (interests !== undefined) onboardingData.interests = interests;
       if (challenge !== undefined) onboardingData.challenge = challenge;
-      if (preffered_learning_style !== undefined) onboardingData.preffered_learning_style = preffered_learning_style;
+      // if (preffered_learning_style !== undefined) onboardingData.preffered_learning_style = preffered_learning_style;
       if (weekly_commitment !== undefined) onboardingData.weekly_commitment = weekly_commitment;
       if (how_often !== undefined) onboardingData.how_often = how_often;
   
