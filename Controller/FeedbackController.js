@@ -108,14 +108,18 @@ const submitFeedback = async (req, res) => {
     
     // Update daily points
     const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
+    const dayStr = currentDate.toISOString().split("T")[0]; // Get just the date part (YYYY-MM-DD)
+    
+    // Find entry by comparing just the date part (ignoring time)
     let dailyEntry = userProgress.daily_points.find(entry => {
-      const entryDate = new Date(entry.date);
-      return entryDate.getTime() === currentDate.getTime();
+      return new Date(entry.date).toISOString().split("T")[0] === dayStr;
     });
+    
     if (dailyEntry) {
+      // If an entry for today exists, add to its points
       dailyEntry.points += pointsEarned;
     } else {
+      // Otherwise create a new entry for today
       userProgress.daily_points.push({ date: currentDate, points: pointsEarned });
     }
     
@@ -123,8 +127,12 @@ const submitFeedback = async (req, res) => {
     const day = currentDate.getDay();
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - day + (day === 0 ? -6 : 1));
+    startOfWeek.setHours(0, 0, 0, 0); // Set to start of day
+
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999); // Set to end of day
+
     let weeklyEntry = userProgress.weekly_points.find(entry =>
       new Date(entry.weekStart).toISOString().split('T')[0] === startOfWeek.toISOString().split('T')[0]
     );

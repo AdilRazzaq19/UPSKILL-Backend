@@ -247,25 +247,46 @@ const awardSkillBadges = async (progress) => {
   progress.points += (progress.skill_points - previousSkillPoints);
 };
 
-
 const updateStreaks = async (progress) => {
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
 
-  // Ensure streak counters are initialized.
+  // Ensure streak counters are initialized
   progress.dailyStreak = progress.dailyStreak || 0;
   progress.maxDailyStreak = progress.maxDailyStreak || 0;
   progress.weeklyStreak = progress.weeklyStreak || 0;
   progress.maxWeeklyStreak = progress.maxWeeklyStreak || 0;
   progress.consecutiveModules = progress.consecutiveModules || 0;
-
-  // If there's no record of a previous completion, initialize everything.
+  
+  // Track modules completed by day (for the heat map)
+  if (!progress.dailyModuleCount) {
+    progress.dailyModuleCount = {};
+  }
+  
+  // Initialize daily module count for today if not exists
+  if (!progress.dailyModuleCount[todayStr]) {
+    progress.dailyModuleCount[todayStr] = 0;
+  }
+  
+  // Increment today's module count (for the heat map)
+  progress.dailyModuleCount[todayStr] += 1;
+  
+  // Get today's module count after increment
+  const todayModuleCount = progress.dailyModuleCount[todayStr];
+  
+  // Handle daily streak logic
   if (!progress.lastCompletionDate) {
+    // First completion ever
     progress.dailyStreak = 1;
+    progress.consecutiveModules = 1;
   } else {
     const lastDateStr = new Date(progress.lastCompletionDate).toISOString().split("T")[0];
+    
     if (lastDateStr !== todayStr) {
-      // Check if the last completion was exactly yesterday.
+      // Day has changed - reset consecutive modules counter to 1
+      progress.consecutiveModules = 1;
+      
+      // Check if the last completion was exactly yesterday for dailyStreak
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split("T")[0];
@@ -275,35 +296,98 @@ const updateStreaks = async (progress) => {
       } else {
         progress.dailyStreak = 1;
       }
+    } else {
+      // Same day - increment consecutive modules
+      progress.consecutiveModules += 1;
     }
   }
-  progress.consecutiveModules += 1;
+  
   progress.lastCompletionDate = now;
 
-  // Update the maximum daily streak if needed.
+  // Update the maximum daily streak if needed
   if (progress.dailyStreak > progress.maxDailyStreak) {
     progress.maxDailyStreak = progress.dailyStreak;
   }
 
-  // Every 5-day daily streak increases the weekly streak and awards a badge.
+  // Award streak badges
   if (progress.dailyStreak % 5 === 0 && progress.dailyStreak !== 0) {
     progress.weeklyStreak += 1;
     if (progress.weeklyStreak > progress.maxWeeklyStreak) {
-      progress.maxWeeklyStreak = progress.weeklyStreak;
+      progress.maxWeeklyStreak = progress.maxWeeklyStreak;
     }
     await awardBadgeOnce(progress, "Daily Devotee");
   }
   if (progress.dailyStreak === 30) {
     await awardBadgeOnce(progress, "Weekly Warrior");
   }
-  if (progress.consecutiveModules === 3) {
+  
+  // Award badges based on modules completed in a single day
+  if (todayModuleCount === 3) {
     await awardBadgeOnce(progress, "Triple Triumph");
-  } else if (progress.consecutiveModules === 5) {
+  } else if (todayModuleCount === 5) {
     await awardBadgeOnce(progress, "Pentagon Pursuer");
-  } else if (progress.consecutiveModules === 10) {
+  } else if (todayModuleCount === 10) {
     await awardBadgeOnce(progress, "Decathlon Achiever");
   }
+  
+  // Mark the dailyModuleCount object as modified to ensure Mongoose saves it
+  progress.markModified('dailyModuleCount');
 };
+// const updateStreaks = async (progress) => {
+//   const now = new Date();
+//   const todayStr = now.toISOString().split("T")[0];
+
+//   // Ensure streak counters are initialized.
+//   progress.dailyStreak = progress.dailyStreak || 0;
+//   progress.maxDailyStreak = progress.maxDailyStreak || 0;
+//   progress.weeklyStreak = progress.weeklyStreak || 0;
+//   progress.maxWeeklyStreak = progress.maxWeeklyStreak || 0;
+//   progress.consecutiveModules = progress.consecutiveModules || 0;
+
+//   // If there's no record of a previous completion, initialize everything.
+//   if (!progress.lastCompletionDate) {
+//     progress.dailyStreak = 1;
+//   } else {
+//     const lastDateStr = new Date(progress.lastCompletionDate).toISOString().split("T")[0];
+//     if (lastDateStr !== todayStr) {
+//       // Check if the last completion was exactly yesterday.
+//       const yesterday = new Date(now);
+//       yesterday.setDate(now.getDate() - 1);
+//       const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+//       if (lastDateStr === yesterdayStr) {
+//         progress.dailyStreak += 1;
+//       } else {
+//         progress.dailyStreak = 1;
+//       }
+//     }
+//   }
+//   progress.consecutiveModules += 1;
+//   progress.lastCompletionDate = now;
+
+//   // Update the maximum daily streak if needed.
+//   if (progress.dailyStreak > progress.maxDailyStreak) {
+//     progress.maxDailyStreak = progress.dailyStreak;
+//   }
+
+//   if (progress.dailyStreak % 5 === 0 && progress.dailyStreak !== 0) {
+//     progress.weeklyStreak += 1;
+//     if (progress.weeklyStreak > progress.maxWeeklyStreak) {
+//       progress.maxWeeklyStreak = progress.weeklyStreak;
+//     }
+//     await awardBadgeOnce(progress, "Daily Devotee");
+//   }
+//   if (progress.dailyStreak === 30) {
+//     await awardBadgeOnce(progress, "Weekly Warrior");
+//   }
+//   if (progress.consecutiveModules === 3) {
+//     await awardBadgeOnce(progress, "Triple Triumph");
+//   } else if (progress.consecutiveModules === 5) {
+//     await awardBadgeOnce(progress, "Pentagon Pursuer");
+//   } else if (progress.consecutiveModules === 10) {
+//     await awardBadgeOnce(progress, "Decathlon Achiever");
+//   }
+// };
 
 const allocateMasterBadge = async (progress, quizScore) => {
   if (quizScore === 10) {
@@ -549,7 +633,6 @@ const completeModule = async (req, res) => {
     const pointsEarned = progress.points - pointsBefore;
   
     const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
   
     const dayStr = currentDate.toISOString().split("T")[0];
     let dailyEntry = progress.daily_points.find(entry => {
@@ -564,9 +647,12 @@ const completeModule = async (req, res) => {
     const day = currentDate.getDay();
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - day + (day === 0 ? -6 : 1));
+    startOfWeek.setHours(0, 0, 0, 0); // Set to start of day
+
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-  
+    endOfWeek.setHours(23, 59, 59, 999); // Set to end of day
+
     let weeklyEntry = progress.weekly_points.find(entry => {
       return new Date(entry.weekStart).toISOString().split("T")[0] === startOfWeek.toISOString().split("T")[0];
     });
@@ -814,19 +900,116 @@ const getUserDailyPointsHeat = async (req, res) => {
       return res.status(404).json({ message: "User progress not found." });
     }
     
-    const heatData = (progress.daily_points || [])
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map(entry => ({
-        date: entry.date.toISOString().split("T")[0],  
-        points: entry.points
-      }));
+    // Create a combined dataset that includes both the daily_points data and module completions
+    const combinedHeatData = [];
     
-    res.status(200).json({ heatData });
+    // First, process the existing daily_points data
+    const dailyPoints = progress.daily_points || [];
+    dailyPoints.forEach(entry => {
+      const dateStr = new Date(entry.date).toISOString().split("T")[0];
+      combinedHeatData.push({
+        date: dateStr,
+        points: entry.points,
+        modules: 0 // Default value, will be updated if we have module data
+      });
+    });
+    
+    // Process module completions to count by date
+    const completedModules = progress.completed_modules || [];
+    
+    // Create a map to count modules by date
+    const modulesByDate = {};
+    
+    completedModules.forEach(moduleEntry => {
+      // Extract date from completed_at timestamp
+      const completionDate = new Date(moduleEntry.completed_at);
+      const dateStr = completionDate.toISOString().split("T")[0];
+      
+      // Increment the count for this date
+      if (!modulesByDate[dateStr]) {
+        modulesByDate[dateStr] = 1;
+      } else {
+        modulesByDate[dateStr] += 1;
+      }
+    });
+    
+    // Add module counts to heat data
+    Object.keys(modulesByDate).forEach(dateStr => {
+      const moduleCount = modulesByDate[dateStr];
+      
+      // Check if we already have an entry for this date in our combined data
+      const existingEntryIndex = combinedHeatData.findIndex(entry => entry.date === dateStr);
+      
+      if (existingEntryIndex >= 0) {
+        // Update existing entry with module count
+        combinedHeatData[existingEntryIndex].modules = moduleCount;
+      } else {
+        // Create a new entry if none exists for this date
+        combinedHeatData.push({
+          date: dateStr,
+          points: 0, // No points recorded for this day yet
+          modules: moduleCount
+        });
+      }
+    });
+    
+    // If dailyModuleCount exists, use that data as well (for newer implementations)
+    if (progress.dailyModuleCount) {
+      Object.keys(progress.dailyModuleCount).forEach(dateStr => {
+        const moduleCount = progress.dailyModuleCount[dateStr];
+        
+        // Check if we already have an entry for this date in our combined data
+        const existingEntryIndex = combinedHeatData.findIndex(entry => entry.date === dateStr);
+        
+        if (existingEntryIndex >= 0) {
+          // Update existing entry with module count (prefer dailyModuleCount over derived count)
+          combinedHeatData[existingEntryIndex].modules = moduleCount;
+        } else {
+          // Create a new entry if none exists for this date
+          combinedHeatData.push({
+            date: dateStr,
+            points: 0, // No points recorded for this day yet
+            modules: moduleCount
+          });
+        }
+      });
+    }
+    
+    // Sort the data by date
+    const sortedHeatData = combinedHeatData.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    res.status(200).json({ heatData: sortedHeatData });
   } catch (error) {
     console.error("Error retrieving daily points heat data:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+// const getUserDailyPointsHeat = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+    
+//     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+//       return res.status(400).json({ message: "Invalid user ID provided." });
+//     }
+//     const progress = await UserProgress.findOne({ user_id: userId });
+//     if (!progress) {
+//       return res.status(404).json({ message: "User progress not found." });
+//     }
+    
+//     const heatData = (progress.daily_points || [])
+//       .sort((a, b) => new Date(a.date) - new Date(b.date))
+//       .map(entry => ({
+//         date: entry.date.toISOString().split("T")[0],  
+//         points: entry.points
+//       }));
+    
+//     res.status(200).json({ heatData });
+//   } catch (error) {
+//     console.error("Error retrieving daily points heat data:", error);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
 
 const userRanking = async (req, res) => {
   try {

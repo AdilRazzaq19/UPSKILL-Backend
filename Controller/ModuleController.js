@@ -6,9 +6,9 @@ const UserProgress = require("../Models/userProgress");
 const Video = require('../Models/Video'); // Adjust path if needed
 
 const createModule = async (req, res) => {
-  if (req.userRole !== "admin") {
-    return res.status(403).json({ message: "Access denied: Admins only." });
-  }
+  // if (req.userRole !== "admin") {
+  //   return res.status(403).json({ message: "Access denied: Admins only." });
+  // }
     try {
         const { unique_ModuleID,name, section_id, theme_id} = req.body;
 
