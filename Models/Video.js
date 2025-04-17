@@ -77,6 +77,10 @@ const VideoSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "FlashcardResponse"
   }],
+  quickReviewStatements: [{
+    type: Schema.Types.ObjectId,
+    ref: "QuickReviewStatement"
+  }],
   learnedSkills: [{
     type: Schema.Types.ObjectId,
     ref: "Skill"

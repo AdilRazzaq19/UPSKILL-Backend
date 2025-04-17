@@ -3,6 +3,8 @@ const UserLearning = require("../Models/Learning");
 const Section = require("../Models/Section");
 const Module = require("../Models/Module");
 const UserProgress = require("../Models/userProgress");
+const QuickReviewStatement = require("../Models/QuickReviewStatement");
+
 
 const addUserLearningByModule = async (req, res) => {
   try {
@@ -606,15 +608,12 @@ const checkUserLearningModule = async (req, res) => {
   }
 };
 
-
-
-
 // const getUserLearningProgress = async (req, res) => {
 //   try {
 //     const user_id = req.user.id;
-
-//     // Since we now have a consolidated UserLearning document per user,
-//     // we use findOne instead of find.
+//     console.log(`Fetching learning modules for user: ${user_id}`);
+    
+//     // Get the user's learning data with populated references
 //     const userLearning = await UserLearning.findOne({ user_id })
 //       .populate({
 //         path: "sections.section_id",
@@ -629,7 +628,7 @@ const checkUserLearningModule = async (req, res) => {
 //         select: "name video",
 //         populate: {
 //           path: "video",
-//           select: "channel_name"
+//           select: "channel_name channelName quickReviewStatements" 
 //         }
 //       })
 //       .populate({
@@ -637,116 +636,173 @@ const checkUserLearningModule = async (req, res) => {
 //         select: "name video",
 //         populate: {
 //           path: "video",
-//           select: "channel_name"
+//           select: "channel_name channelName quickReviewStatements" 
 //         }
 //       });
 
 //     if (!userLearning) {
-//       return res.status(404).json({ message: "No learning progress found for this user" });
+//       console.log("No learning modules found for user");
+//       return res.status(200).json({
+//         aiRecommendations: [],
+//         userPreferenceModules: [],
+//         totalAiRecommendationCount: 0,
+//         totalModuleCount: 0
+//       });
 //     }
 
-//     let totalModuleCount = 0;
-//     let totalAiRecommendationCount = 0;
-//     const aiRecommendationsBySection = {};
+//     console.log("Found user learning document, processing data...");
+    
+//     // Group data by section for user preference modules
 //     const userPreferenceBySection = {};
-
-//     // Iterate over each section in the consolidated document.
-//     userLearning.sections.forEach(section => {
-//       // Extract section details from the populated section_id.
-//       const sec = section.section_id
-//         ? { id: section.section_id._id, name: section.section_id.name }
-//         : { id: "unknown", name: "Unknown Section" };
-//       const secId = sec.id.toString();
-
-//       // Process AI recommendation modules for this section.
-//       section.ai_recommendation.forEach(rec => {
-//         const moduleObj = {
-//           id: rec.module_id ? rec.module_id._id : null,
-//           name: rec.module_id ? rec.module_id.name : rec.module_name || "Unknown Module",
-//           completed: rec.completed,
-//           video: rec.module_id && rec.module_id.video
-//             ? { channelName: rec.module_id.video.channel_name }
-//             : {},
-//           aiModuleTitle: rec.ai_module_title || null,
-//           relevanceStatement: rec.relevance_statement || null
-//         };
-
-//         if (!aiRecommendationsBySection[secId]) {
-//           aiRecommendationsBySection[secId] = { ...sec, modules: [] };
+//     // Group data by section for AI recommendations
+//     const aiRecommendationsBySection = {};
+    
+//     // Process the sections array
+//     if (userLearning.sections && userLearning.sections.length > 0) {
+//       console.log(`Processing ${userLearning.sections.length} sections`);
+      
+//       userLearning.sections.forEach((section, sectionIndex) => {
+//         // Get section details
+//         const sectionName = section.section_id && section.section_id.name ? 
+//                             section.section_id.name : 
+//                             `Section ${sectionIndex + 1}`;
+        
+//         const sectionId = section.section_id ? section.section_id._id.toString() : `section_${sectionIndex}`;
+//         console.log(`Processing section ${sectionIndex}: ${sectionName} (ID: ${sectionId})`);
+        
+//         // Process user modules
+//         if (section.modules && section.modules.length > 0) {
+//           console.log(`Processing ${section.modules.length} user modules in section ${sectionName}`);
+          
+//           // Initialize section in userPreferenceBySection if not exists
+//           if (!userPreferenceBySection[sectionId]) {
+//             userPreferenceBySection[sectionId] = {
+//               id: section.section_id ? section.section_id._id : `section_id_${sectionIndex}`,
+//               name: sectionName,
+//               modules: []
+//             };
+//           }
+          
+//           // Add each module to the section
+//           section.modules.forEach((mod, moduleIndex) => {
+//             // Get module details
+//             const moduleName = mod.module_id && mod.module_id.name ? mod.module_id.name : mod.module_name || `Module ${moduleIndex + 1}`;
+//             console.log(`Processing user module ${moduleIndex}: ${moduleName}`);
+            
+//             // Get video channel name if available
+//             let channelName = "Unknown";
+//             if (mod.module_id && mod.module_id.video) {
+//               channelName = mod.module_id.video.channel_name || mod.module_id.video.channelName || "Unknown";
+//             }
+            
+//             // Create the module object in the format expected by the frontend
+//             const moduleObj = {
+//               id: mod.module_id ? mod.module_id._id : null,
+//               unique_ModuleID: mod.unique_ModuleID,
+//               name: moduleName,
+//               completed: mod.completed || false,
+//               video: { channelName }
+//             };
+            
+//             userPreferenceBySection[sectionId].modules.push(moduleObj);
+//           });
 //         }
-//         aiRecommendationsBySection[secId].modules.push(moduleObj);
-//         totalAiRecommendationCount++;
-//       });
-
-//       // Process user-preferred modules for this section.
-//       section.modules.forEach(mod => {
-//         const moduleObj = {
-//           id: mod.module_id ? mod.module_id._id : null,
-//           name: mod.module_id ? mod.module_id.name : mod.module_name || "Unknown Module",
-//           completed: mod.completed,
-//           video: mod.module_id && mod.module_id.video
-//             ? { channelName: mod.module_id.video.channel_name }
-//             : {},
-//           aiModuleTitle: mod.ai_module_title || null,
-//           relevanceStatement: mod.relevance_statement || null
-//         };
-
-//         if (!userPreferenceBySection[secId]) {
-//           userPreferenceBySection[secId] = { ...sec, modules: [] };
+        
+//         // Process AI recommendations
+//         if (section.ai_recommendation && section.ai_recommendation.length > 0) {
+//           console.log(`Processing ${section.ai_recommendation.length} AI recommendations in section ${sectionName}`);
+          
+//           // Initialize section in aiRecommendationsBySection if not exists
+//           if (!aiRecommendationsBySection[sectionId]) {
+//             aiRecommendationsBySection[sectionId] = {
+//               id: section.section_id ? section.section_id._id : `section_id_${sectionIndex}`,
+//               name: sectionName,
+//               modules: []
+//             };
+//           }
+          
+//           // Add each AI recommendation to the section
+//           section.ai_recommendation.forEach((rec, recIndex) => {
+//             // Get module details
+//             const moduleName = rec.module_id && rec.module_id.name ? rec.module_id.name : rec.module_name || `Recommendation ${recIndex + 1}`;
+//             console.log(`Processing AI recommendation ${recIndex}: ${moduleName}`);
+            
+//             // Get video channel name if available
+//             let channelName = "Unknown";
+//             if (rec.module_id && rec.module_id.video) {
+//               channelName = rec.module_id.video.channel_name || rec.module_id.video.channelName || "Unknown";
+//             }
+            
+//             // Create the module object in the format expected by the frontend
+//             const moduleObj = {
+//               id: rec.module_id ? rec.module_id._id : null,
+//               name: moduleName,
+//               completed: rec.completed || false,
+//               video: { channelName },
+//               aiModuleTitle: rec.ai_module_title || moduleName,
+//               relevanceStatement: rec.relevance_statement || ""
+//             };
+            
+//             aiRecommendationsBySection[sectionId].modules.push(moduleObj);
+//           });
 //         }
-//         userPreferenceBySection[secId].modules.push(moduleObj);
-//         totalModuleCount++;
 //       });
-//     });
-
-//     const formattedProgress = {
+//     } else {
+//       console.log("No sections found in user learning document");
+//     }
+    
+//     // Convert the section maps to arrays
+//     const userPreferenceModules = Object.values(userPreferenceBySection);
+//     const aiRecommendations = Object.values(aiRecommendationsBySection);
+    
+//     // Calculate total counts
+//     const totalModuleCount = userPreferenceModules.reduce(
+//       (total, section) => total + section.modules.length, 0
+//     );
+    
+//     const totalAiRecommendationCount = aiRecommendations.reduce(
+//       (total, section) => total + section.modules.length, 0
+//     );
+    
+//     console.log(`Found ${totalModuleCount} user modules in ${userPreferenceModules.length} sections`);
+//     console.log(`Found ${totalAiRecommendationCount} AI recommendations in ${aiRecommendations.length} sections`);
+    
+//     // Return the formatted data
+//     return res.status(200).json({
 //       totalAiRecommendationCount,
 //       totalModuleCount,
-//       aiRecommendations: Object.values(aiRecommendationsBySection),
-//       userPreferenceModules: Object.values(userPreferenceBySection)
-//     };
-
-//     return res.status(200).json(formattedProgress);
+//       aiRecommendations,
+//       userPreferenceModules
+//     });
 //   } catch (error) {
-//     console.error("Error getting learning progress:", error);
-//     return res.status(500).json({ message: "Internal Server Error", error: error.message });
+//     console.error("Error fetching learning modules:", error);
+//     return res.status(500).json({ 
+//       message: "Error fetching learning modules", 
+//       error: error.message 
+//     });
 //   }
 // };
-
 const getUserLearningProgress = async (req, res) => {
   try {
     const user_id = req.user.id;
     console.log(`Fetching learning modules for user: ${user_id}`);
-    
-    // Get the user's learning data with populated references
+
+    // 1) Load userLearning with all your populates
     const userLearning = await UserLearning.findOne({ user_id })
-      .populate({
-        path: "sections.section_id",
-        select: "name"
-      })
-      .populate({
-        path: "sections.theme_id",
-        select: "name"
-      })
+      .populate({ path: "sections.section_id",           select: "name" })
+      .populate({ path: "sections.theme_id",             select: "name" })
       .populate({
         path: "sections.modules.module_id",
         select: "name video",
-        populate: {
-          path: "video",
-          select: "channel_name channelName"
-        }
+        populate: { path: "video", select: "channel_name channelName" }
       })
       .populate({
         path: "sections.ai_recommendation.module_id",
         select: "name video",
-        populate: {
-          path: "video",
-          select: "channel_name channelName"
-        }
+        populate: { path: "video", select: "channel_name channelName" }
       });
 
     if (!userLearning) {
-      console.log("No learning modules found for user");
       return res.status(200).json({
         aiRecommendations: [],
         userPreferenceModules: [],
@@ -756,123 +812,113 @@ const getUserLearningProgress = async (req, res) => {
     }
 
     console.log("Found user learning document, processing data...");
-    
-    // Group data by section for user preference modules
-    const userPreferenceBySection = {};
-    // Group data by section for AI recommendations
-    const aiRecommendationsBySection = {};
-    
-    // Process the sections array
-    if (userLearning.sections && userLearning.sections.length > 0) {
-      console.log(`Processing ${userLearning.sections.length} sections`);
-      
-      userLearning.sections.forEach((section, sectionIndex) => {
-        // Get section details
-        const sectionName = section.section_id && section.section_id.name ? 
-                            section.section_id.name : 
-                            `Section ${sectionIndex + 1}`;
-        
-        const sectionId = section.section_id ? section.section_id._id.toString() : `section_${sectionIndex}`;
-        console.log(`Processing section ${sectionIndex}: ${sectionName} (ID: ${sectionId})`);
-        
-        // Process user modules
-        if (section.modules && section.modules.length > 0) {
-          console.log(`Processing ${section.modules.length} user modules in section ${sectionName}`);
-          
-          // Initialize section in userPreferenceBySection if not exists
-          if (!userPreferenceBySection[sectionId]) {
-            userPreferenceBySection[sectionId] = {
-              id: section.section_id ? section.section_id._id : `section_id_${sectionIndex}`,
-              name: sectionName,
-              modules: []
-            };
-          }
-          
-          // Add each module to the section
-          section.modules.forEach((mod, moduleIndex) => {
-            // Get module details
-            const moduleName = mod.module_id && mod.module_id.name ? mod.module_id.name : mod.module_name || `Module ${moduleIndex + 1}`;
-            console.log(`Processing user module ${moduleIndex}: ${moduleName}`);
-            
-            // Get video channel name if available
-            let channelName = "Unknown";
-            if (mod.module_id && mod.module_id.video) {
-              channelName = mod.module_id.video.channel_name || mod.module_id.video.channelName || "Unknown";
-            }
-            
-            // Create the module object in the format expected by the frontend
-            const moduleObj = {
-              id: mod.module_id ? mod.module_id._id : null,
-              unique_ModuleID: mod.unique_ModuleID,
-              name: moduleName,
-              completed: mod.completed || false,
-              video: { channelName }
-            };
-            
-            userPreferenceBySection[sectionId].modules.push(moduleObj);
-          });
-        }
-        
-        // Process AI recommendations
-        if (section.ai_recommendation && section.ai_recommendation.length > 0) {
-          console.log(`Processing ${section.ai_recommendation.length} AI recommendations in section ${sectionName}`);
-          
-          // Initialize section in aiRecommendationsBySection if not exists
-          if (!aiRecommendationsBySection[sectionId]) {
-            aiRecommendationsBySection[sectionId] = {
-              id: section.section_id ? section.section_id._id : `section_id_${sectionIndex}`,
-              name: sectionName,
-              modules: []
-            };
-          }
-          
-          // Add each AI recommendation to the section
-          section.ai_recommendation.forEach((rec, recIndex) => {
-            // Get module details
-            const moduleName = rec.module_id && rec.module_id.name ? rec.module_id.name : rec.module_name || `Recommendation ${recIndex + 1}`;
-            console.log(`Processing AI recommendation ${recIndex}: ${moduleName}`);
-            
-            // Get video channel name if available
-            let channelName = "Unknown";
-            if (rec.module_id && rec.module_id.video) {
-              channelName = rec.module_id.video.channel_name || rec.module_id.video.channelName || "Unknown";
-            }
-            
-            // Create the module object in the format expected by the frontend
-            const moduleObj = {
-              id: rec.module_id ? rec.module_id._id : null,
-              name: moduleName,
-              completed: rec.completed || false,
-              video: { channelName },
-              aiModuleTitle: rec.ai_module_title || moduleName,
-              relevanceStatement: rec.relevance_statement || ""
-            };
-            
-            aiRecommendationsBySection[sectionId].modules.push(moduleObj);
-          });
-        }
+
+    // ── Batch‐fetch all QuickReviewStatement docs for this user’s videos ──
+    const videoIds = new Set();
+    userLearning.sections.forEach(section => {
+      (section.modules || []).forEach(m => {
+        if (m.module_id?.video?._id) videoIds.add(m.module_id.video._id.toString());
       });
-    } else {
-      console.log("No sections found in user learning document");
-    }
-    
-    // Convert the section maps to arrays
-    const userPreferenceModules = Object.values(userPreferenceBySection);
+      (section.ai_recommendation || []).forEach(r => {
+        if (r.module_id?.video?._id) videoIds.add(r.module_id.video._id.toString());
+      });
+    });
+
+    const qrDocs = await QuickReviewStatement.find({
+      video: { $in: Array.from(videoIds) }
+    }).lean();
+
+    const qrMap = qrDocs.reduce((map, doc) => {
+      map[doc.video.toString()] = doc.statements;
+      return map;
+    }, {});
+    // ───────────────────────────────────────────────────────────────────────────
+
+    // Build sections grouped objects
+    const userPreferenceBySection   = {};
+    const aiRecommendationsBySection= {};
+
+    userLearning.sections.forEach((section, sectionIndex) => {
+      const sectionName = section.section_id?.name || `Section ${sectionIndex + 1}`;
+      const sectionId   = section.section_id?._id.toString() || `section_${sectionIndex}`;
+
+      // Initialize groups if needed
+      if (!userPreferenceBySection[sectionId]) {
+        userPreferenceBySection[sectionId] = {
+          id: section.section_id?._id,
+          name: sectionName,
+          modules: []
+        };
+      }
+      if (!aiRecommendationsBySection[sectionId]) {
+        aiRecommendationsBySection[sectionId] = {
+          id: section.section_id?._id,
+          name: sectionName,
+          modules: []
+        };
+      }
+
+      // ── User Preference Modules ──
+      (section.modules || []).forEach((mod, moduleIndex) => {
+        const vid = mod.module_id?.video?._id?.toString();
+        const statements = vid ? (qrMap[vid] || []) : [];
+
+        const moduleObj = {
+          id: mod.module_id?._id || null,
+          unique_ModuleID: mod.unique_ModuleID,
+          name: mod.module_id?.name || mod.module_name || `Module ${moduleIndex + 1}`,
+          completed: mod.completed || false,
+          video: {
+            channelName: mod.module_id?.video?.channel_name
+                         || mod.module_id?.video?.channelName
+                         || "Unknown"
+          },
+          quickReviewStatements: statements
+        };
+
+        userPreferenceBySection[sectionId].modules.push(moduleObj);
+      });
+
+      // ── AI Recommendation Modules ──
+      (section.ai_recommendation || []).forEach((rec, recIndex) => {
+        const vid = rec.module_id?.video?._id?.toString();
+        const statements = vid ? (qrMap[vid] || []) : [];
+
+        const moduleObj = {
+          id: rec.module_id?._id || null,
+          name: rec.module_id?.name || rec.module_name || `Recommendation ${recIndex + 1}`,
+          completed: rec.completed || false,
+          video: {
+            channelName: rec.module_id?.video?.channel_name
+                         || rec.module_id?.video?.channelName
+                         || "Unknown"
+          },
+          aiModuleTitle: rec.ai_module_title || rec.module_id?.name,
+          relevanceStatement: rec.relevance_statement || "",
+          quickReviewStatements: statements
+        };
+
+        aiRecommendationsBySection[sectionId].modules.push(moduleObj);
+      });
+    });
+
+    // Convert to arrays & filter out empty user‐preference sections
+    const userPreferenceModules = Object
+      .values(userPreferenceBySection)
+      .filter(section => section.modules.length > 0);
+
     const aiRecommendations = Object.values(aiRecommendationsBySection);
-    
-    // Calculate total counts
-    const totalModuleCount = userPreferenceModules.reduce(
-      (total, section) => total + section.modules.length, 0
-    );
-    
-    const totalAiRecommendationCount = aiRecommendations.reduce(
-      (total, section) => total + section.modules.length, 0
-    );
-    
-    console.log(`Found ${totalModuleCount} user modules in ${userPreferenceModules.length} sections`);
-    console.log(`Found ${totalAiRecommendationCount} AI recommendations in ${aiRecommendations.length} sections`);
-    
-    // Return the formatted data
+
+    // Calculate totals
+    const totalModuleCount = userPreferenceModules
+      .reduce((sum, s) => sum + s.modules.length, 0);
+    const totalAiRecommendationCount = aiRecommendations
+      .reduce((sum, s) => sum + s.modules.length, 0);
+
+    console.log(`Found ${totalModuleCount} user modules`);
+    console.log(`Found ${totalAiRecommendationCount} AI recommendations`);
+
+    // Return unchanged structure, with filtered userPreferenceModules
     return res.status(200).json({
       totalAiRecommendationCount,
       totalModuleCount,
@@ -881,13 +927,12 @@ const getUserLearningProgress = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching learning modules:", error);
-    return res.status(500).json({ 
-      message: "Error fetching learning modules", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Error fetching learning modules",
+      error: error.message
     });
   }
 };
-
 const getAllLearningModules = async (req, res) => {
   try {
     const user_id = req.user.id;
