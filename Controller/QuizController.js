@@ -22,19 +22,49 @@ const storeQuiz = async (req, res) => {
     }
     
     // Transform MCQs to ensure all required fields
-    const transformedMCQs = mcqArray.map(mcq => ({
-      video_id: mcq.video_id || video_id,
-      transcription_id: mcq.transcription_id || "",
-      question_number: mcq.question_number || "",
-      question: mcq.question || "",
-      option_a: mcq.option_a || "",
-      option_b: mcq.option_b || "",
-      option_c: mcq.option_c || "",
-      option_d: mcq.option_d || "",
-      correct_option: mcq.correct_option || "",
-      explanation: mcq.explanation || "",
-      complexity: mcq.complexity || "Easy"
-    }));
+    const transformedMCQs = mcqArray.map(mcq => {
+      // 1) Normalize correct_option (always “option_a” | “option_b” | “option_c” | “option_d”)
+      const rawCorrect = (mcq.correct_option || "")
+        .toString()
+        .toLowerCase()
+        .trim();
+    
+      let correct_option = "";
+      if (["a","b","c","d"].includes(rawCorrect)) {
+        correct_option = `option_${rawCorrect}`;           // e.g. “option_b”
+      } else if (/^option_[abcd]$/i.test(mcq.correct_option || "")) {
+        // if they sent “OPTION_C” or “Option_C”, this will catch it
+        correct_option = rawCorrect;                       // already lower‑cased above
+      } else {
+        console.warn(`Unexpected correct_option "${mcq.correct_option}"`);
+        correct_option = "";                               // or pick a sensible default
+      }
+    
+      // 2) Normalize complexity (always “easy” | “medium” | “hard”)
+      const rawComplexity = (mcq.complexity || "")
+        .toString()
+        .toLowerCase()
+        .trim();
+    
+      const complexity = ["easy","medium","hard"].includes(rawComplexity)
+        ? rawComplexity
+        : (console.warn(`Unexpected complexity "${mcq.complexity}"`), "medium");
+    
+      return {
+        video_id:         mcq.video_id         || video_id,
+        transcription_id: mcq.transcription_id || "",
+        question_number:  mcq.question_number  || "",
+        question:         mcq.question          || "",
+        option_a:         mcq.option_a          || "",
+        option_b:         mcq.option_b          || "",
+        option_c:         mcq.option_c          || "",
+        option_d:         mcq.option_d          || "",
+        correct_option,   // guaranteed lowercase “option_x”
+        explanation:      mcq.explanation       || "",
+        complexity        // guaranteed lowercase “easy”/“medium”/“hard”
+      };
+    });
+    
     
     // Find the video
     const video = await Video.findOne({ youtubeVideo_id: video_id });
