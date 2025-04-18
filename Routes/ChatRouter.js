@@ -1,12 +1,14 @@
 // routes/videoChatRoutes.js
 const express = require('express');
 const router = express.Router();
-const { validatePayload, videoChatController, generalChatController,getChatHistory } = require('../Controller/ChatController');
+const { validatePayload, videoChatController, generalChatController,getChatHistory,generalChatStreamController,videoChatStreamController } = require('../Controller/ChatController');
 const { authMiddleware } = require("../middleware/auth.middleware");
 
 router.post('/video/:video_id', authMiddleware,validatePayload, videoChatController);
 router.post('/general', authMiddleware,validatePayload, generalChatController);
 router.get("/chat-history", authMiddleware,getChatHistory);
+router.post('/general-chat-stream', authMiddleware,generalChatStreamController);
+router.post('/video-chat-stream/:video_id', authMiddleware,videoChatStreamController);
 router.get('/session/video', authMiddleware, async (req, res) => {
     try {
       const Onboarding = require('../Models/Onboarding');
