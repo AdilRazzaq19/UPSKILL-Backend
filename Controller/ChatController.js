@@ -312,7 +312,7 @@ const getChatHistory = async (req, res) => {
       data: response.data
     });
   } catch (error) {
-    console.error("Error calling external Chat History API:", error.message);
+    console.error("Error calling external Chat History API:", error.message);  
     res.status(500).json({ error: "Failed to fetch chat history." });
   }
 };
@@ -322,6 +322,6 @@ module.exports = {
   videoChatController,
   generalChatController,
   getChatHistory,
-  generalChatStreamController,
+  generalChatStreamController ,
   videoChatStreamController
 };
