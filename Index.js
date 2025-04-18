@@ -28,6 +28,7 @@ const exerciseRoutes = require("./Routes/ApplyRouter");
 const learningPathRoutes=require("./Routes/LearningPathRouter");
 const quickReviewRoutes=require("./Routes/QuickReviewRouter");
 const logger=require("./middleware/logger")
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({

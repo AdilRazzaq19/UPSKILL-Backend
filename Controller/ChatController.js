@@ -2,6 +2,7 @@
 const axios = require('axios');
 const Onboarding = require('../Models/Onboarding'); 
 const Module = require("../Models/Module"); 
+const { createParser, ParsedEvent } = require('eventsource-parser');
 
 const validatePayload = (req, res, next) => {
   const {
@@ -140,6 +141,72 @@ const generalChatController = async (req, res) => {
     });
   }
 };
+
+// const generalChatController = async (req, res) => {
+//   // 1) SSE + keep‑alive headers
+//   res.setHeader('Content-Type',        'text/event-stream');
+//   res.setHeader('Cache-Control',       'no-cache');
+//   res.setHeader('Connection',          'keep-alive');
+//   // if you use compression middleware globally, disable it here
+//   res.setHeader('X-Accel-Buffering',   'no');      // for nginx
+//   req.noCompression = true;                         // for express‑compression
+
+//   res.flushHeaders();   // send headers right away
+
+//   try {
+//     const upstream = await axios.post(
+//       'http://15.237.7.12/v3/general-chat-stream/',
+//       req.body,
+//       {
+//         headers: {
+//           'Content-Type': 'application/json',
+//           'Accept':       'text/event-stream',
+//         },
+//         responseType: 'stream',
+//       }
+//     );
+
+//     // 2) Pipe + intercept
+//     upstream.data.on('data', (chunk) => {
+//       const text = chunk.toString();
+
+//       // intercept session_id
+//       if (text.startsWith('event: session_id')) {
+//         const id = text.match(/data:\s*(\S+)/)[1];
+//         Onboarding.findOneAndUpdate(
+//           { user_id: req.user._id },
+//           { generalChatSessionId: id },
+//           { upsert: true }
+//         ).catch(console.error);
+//       }
+
+//       // forward raw chunk
+//       res.write(text);
+//       // 3) flush after each write
+//       if (res.flush) res.flush();
+//     });
+
+//     upstream.data.on('end', () => {
+//       res.write('\n');  // final newline
+//       res.end();
+//     });
+
+//     upstream.data.on('error', (err) => {
+//       console.error('Upstream error', err);
+//       res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+//       res.end();
+//     });
+//   }
+//   catch (err) {
+//     console.error('Fetch error', err);
+//     if (!res.headersSent) {
+//       res.status(err.response?.status || 500).json(err.response?.data || { message: err.message });
+//     } else {
+//       res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+//       res.end();
+//     }
+//   }
+// };
 
 
 const getChatHistory = async (req, res) => {
