@@ -217,7 +217,7 @@ const generalChatController = async (req, res) => {
       message: "Internal Server Error",
       error: error.message,
     });
-  }
+  } 
 };
 
 
