@@ -39,7 +39,7 @@ const videoChatController = async (req, res) => {
 
   try {
     const response = await axios.post(
-      `http://15.237.7.12/v2/video-chat/?video_id=${video_id}`,
+      `http://15.237.7.12/v3/video-chat/?video_id=${video_id}`,
       req.body,
       {
         headers: {
@@ -87,13 +87,91 @@ const videoChatController = async (req, res) => {
     });
   }
 };
+const videoChatStreamController = async (req, res) => {
+  const { video_id } = req.params;
+  if (!video_id) {
+    return res.status(400).json({ error: "Missing video_id path parameter." });
+  }
+
+  // 1) SSE + keep‑alive headers
+  res.setHeader('Content-Type',      'text/event-stream');
+  res.setHeader('Cache-Control',     'no-cache');
+  res.setHeader('Connection',        'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');    // disable buffering in nginx
+  req.noCompression = true;                    // disable express compression
+  res.flushHeaders();                          // send headers immediately
+
+  // 2) Stream endpoint with query param
+  const externalUrl = `http://15.237.7.12/v3/video-chat-stream/?video_id=${encodeURIComponent(video_id)}`;
+
+  try {
+    // 3) POST the client's body directly, leave video_id in the URL
+    const upstream = await axios.post(
+      externalUrl,
+      req.body,
+      {
+        responseType: 'stream',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept':       'text/event-stream'
+        }
+      }
+    );
+
+    // 4) Pipe + intercept session_id
+    upstream.data.on('data', chunk => {
+      const text = chunk.toString();
+
+      // if this chunk carries a session_id, persist it
+      text.split('\n').forEach(line => {
+        if (line.startsWith('data:')) {
+          const raw = line.replace(/^data:\s*/, '');
+          try {
+            const obj = JSON.parse(raw);
+            if (typeof obj.session_id === 'string') {
+              Onboarding.findOneAndUpdate(
+                { user_id: req.user._id },
+                { videoChatSessionId: obj.session_id },
+                { upsert: true }
+              ).catch(console.error);
+            }
+          } catch {/* ignore */}
+        }
+      });
+      
+
+      // forward the raw SSE chunk
+      res.write(text);
+      if (res.flush) res.flush();
+    });
+
+    upstream.data.on('end', () => {
+      // close the SSE connection
+      res.write('\n');
+      res.end();
+    });
+
+    upstream.data.on('error', err => {
+      console.error('Upstream stream error:', err);
+      res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+      res.end();
+    });
+  } catch (err) {
+    console.error('Fetch error:', err.message);
+    if (!res.headersSent) {
+      return res.status(err.response?.status || 502).json(err.response?.data || { message: err.message });
+    }
+    res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+    res.end();
+  }
+};
 
 
 
 const generalChatController = async (req, res) => {
   try {
     const response = await axios.post(
-      `http://15.237.7.12/v2/general-chat/`,
+      `http://15.237.7.12/v3/general-chat/`,
       req.body,
       {
         headers: {
@@ -142,71 +220,79 @@ const generalChatController = async (req, res) => {
   }
 };
 
-// const generalChatController = async (req, res) => {
-//   // 1) SSE + keep‑alive headers
-//   res.setHeader('Content-Type',        'text/event-stream');
-//   res.setHeader('Cache-Control',       'no-cache');
-//   res.setHeader('Connection',          'keep-alive');
-//   // if you use compression middleware globally, disable it here
-//   res.setHeader('X-Accel-Buffering',   'no');      // for nginx
-//   req.noCompression = true;                         // for express‑compression
+  const generalChatStreamController = async (req, res) => {
+    // 1) SSE + keep‑alive headers
+    res.setHeader('Content-Type',        'text/event-stream');
+    res.setHeader('Cache-Control',       'no-cache');
+    res.setHeader('Connection',          'keep-alive');
+    // if you use compression middleware globally, disable it here
+    res.setHeader('X-Accel-Buffering',   'no');      // for nginx
+    req.noCompression = true;                         // for express‑compression
 
-//   res.flushHeaders();   // send headers right away
+    res.flushHeaders();   // send headers right away
 
-//   try {
-//     const upstream = await axios.post(
-//       'http://15.237.7.12/v3/general-chat-stream/',
-//       req.body,
-//       {
-//         headers: {
-//           'Content-Type': 'application/json',
-//           'Accept':       'text/event-stream',
-//         },
-//         responseType: 'stream',
-//       }
-//     );
+    try {
+      const upstream = await axios.post(
+        'http://15.237.7.12/v3/general-chat-stream/',
+        req.body,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept':       'text/event-stream',
+          },
+          responseType: 'stream',
+        }
+      );
 
-//     // 2) Pipe + intercept
-//     upstream.data.on('data', (chunk) => {
-//       const text = chunk.toString();
+      // 2) Pipe + intercept
+      upstream.data.on('data', (chunk) => {
+        const text = chunk.toString();
 
-//       // intercept session_id
-//       if (text.startsWith('event: session_id')) {
-//         const id = text.match(/data:\s*(\S+)/)[1];
-//         Onboarding.findOneAndUpdate(
-//           { user_id: req.user._id },
-//           { generalChatSessionId: id },
-//           { upsert: true }
-//         ).catch(console.error);
-//       }
+// split out every `data:` line, JSON‑parse it, then grab .session_id
+      text.split('\n').forEach(line => {
+        if (line.startsWith('data:')) {
+          const raw = line.replace(/^data:\s*/, '');
+          try {
+            const obj = JSON.parse(raw);
+            if (typeof obj.session_id === 'string') {
+              Onboarding.findOneAndUpdate(
+                { user_id: req.user._id },
+                { generalChatSessionId: obj.session_id },
+                { upsert: true }
+              ).catch(console.error);
+            }
+          } catch {/* ignore non‑JSON lines */}
+        }
+      });
 
-//       // forward raw chunk
-//       res.write(text);
-//       // 3) flush after each write
-//       if (res.flush) res.flush();
-//     });
 
-//     upstream.data.on('end', () => {
-//       res.write('\n');  // final newline
-//       res.end();
-//     });
+        // forward raw chunk
+        res.write(text);
+        // 3) flush after each write
+        if (res.flush) res.flush();
+      });
 
-//     upstream.data.on('error', (err) => {
-//       console.error('Upstream error', err);
-//       res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
-//       res.end();
-//     });
-//   }
-//   catch (err) {
-//     console.error('Fetch error', err);
-//     if (!res.headersSent) {
-//       res.status(err.response?.status || 500).json(err.response?.data || { message: err.message });
-//     } else {
-//       res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
-//       res.end();
-//     }
-//   }
-// };
+      upstream.data.on('end', () => {
+        res.write('\n');  // final newline
+        res.end();
+      });
+
+      upstream.data.on('error', (err) => {
+        console.error('Upstream error', err);
+        res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+        res.end();
+      });
+    }
+    catch (err) {
+      console.error('Fetch error', err);
+      if (!res.headersSent) {
+        res.status(err.response?.status || 500).json(err.response?.data || { message: err.message });
+      } else {
+        res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+        res.end();
+      }
+    }
+  };
 
 
 const getChatHistory = async (req, res) => {
@@ -235,5 +321,7 @@ module.exports = {
   validatePayload,
   videoChatController,
   generalChatController,
-  getChatHistory
+  getChatHistory,
+  generalChatStreamController,
+  videoChatStreamController
 };
