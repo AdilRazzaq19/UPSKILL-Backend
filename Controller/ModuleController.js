@@ -396,45 +396,62 @@ const updateModuleforAdmin = async (req, res) => {
     if (!moduleId) {
       return res.status(400).json({ message: "Module ID is required." });
     }
-
+    
     const updateData = req.body;
-
+    console.log("Update data received:", JSON.stringify(updateData, null, 2));
+    
     // Find the module document by ID.
     const moduleDoc = await Module.findById(moduleId);
     if (!moduleDoc) {
       return res.status(404).json({ message: "Module not found." });
     }
-
-    // Update top-level module fields.
-    if (updateData.moduleName) moduleDoc.name = updateData.moduleName;
+    
+    console.log("Current module in DB:", JSON.stringify(moduleDoc, null, 2));
+    
+    // FIXED: Update top-level module fields with correct field names
+    // Check your MongoDB schema for the exact field names
+    if (updateData.moduleName) moduleDoc.moduleName = updateData.moduleName;
     if (updateData.themeName) moduleDoc.themeName = updateData.themeName;
-    if (updateData.themeId) moduleDoc.theme_id = updateData.themeId;
+    if (updateData.themeId) moduleDoc.themeId = updateData.themeId;
     if (updateData.sectionName) moduleDoc.sectionName = updateData.sectionName;
-    if (updateData.sectionId) moduleDoc.section_id = updateData.sectionId;
-
+    if (updateData.sectionId) moduleDoc.sectionId = updateData.sectionId;
+    
     // Check if the update includes video fields.
     if (updateData.video) {
       if (moduleDoc.video) {
         try {
           const videoDoc = await Video.findById(moduleDoc.video);
           if (videoDoc) {
+            console.log("Current video in DB:", JSON.stringify(videoDoc, null, 2));
+            
             if (updateData.video.videoUrl)
-              videoDoc.video_url = updateData.video.videoUrl;
-            if (updateData.video.learnedSkills)
+              videoDoc.videoUrl = updateData.video.videoUrl; // FIXED: field name should match schema
+              
+            if (updateData.video.learnedSkills) {
+              // Ensure learnedSkills is correctly formatted
               videoDoc.learnedSkills = updateData.video.learnedSkills;
-            // Optionally update other video fields.
+              console.log("Updated learnedSkills:", JSON.stringify(videoDoc.learnedSkills, null, 2));
+            }
+            
+            // Save the video document
             await videoDoc.save();
+            console.log("Video saved successfully");
+          } else {
+            console.log("Video document not found for ID:", moduleDoc.video);
           }
         } catch (videoError) {
           console.error("Error updating video:", videoError);
           // Continue with module update even if video update fails.
         }
+      } else {
+        console.log("Module has no associated video document");
       }
     }
-
+    
     // Save the updated module.
     await moduleDoc.save();
-
+    console.log("Module saved successfully");
+    
     return res.status(200).json({
       message: "Module updated successfully",
       module: moduleDoc,
