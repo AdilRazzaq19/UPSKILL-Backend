@@ -408,104 +408,129 @@ const updateModuleforAdmin = async (req, res) => {
     
     console.log("Current module in DB:", JSON.stringify({
       id: moduleDoc._id,
-      moduleName: moduleDoc.name, // CORRECTED: Schema uses "name", not "moduleName"
-      themeName: updateData.themeName, // Not directly in schema, but we can include for response
-      themeId: moduleDoc.theme_id, // CORRECTED: Schema uses "theme_id", not "themeId"
-      sectionName: updateData.sectionName, // Not directly in schema, but we can include for response
-      sectionId: moduleDoc.section_id, // CORRECTED: Schema uses "section_id", not "sectionId"
+      name: moduleDoc.name,
+      themeName: updateData.themeName,
+      theme_id: moduleDoc.theme_id,
+      sectionName: updateData.sectionName,
+      section_id: moduleDoc.section_id,
       video: moduleDoc.video
     }, null, 2));
     
-    // FIXED: Update top-level module fields with correct field names that match the schema
-    // Use more robust checks to prevent empty values from overwriting existing data
+    // Update module fields using the correct schema field names
     if (updateData.moduleName) {
-      moduleDoc.name = updateData.moduleName; // CORRECTED: Schema uses "name"
+      moduleDoc.name = updateData.moduleName;
+    }
+    
+    if (updateData.themeName) {
+      // Store themeName if your schema supports it
+      // This might be just for display purposes
     }
     
     // Only update themeId if it has a non-empty value
     if (updateData.themeId && updateData.themeId.trim() !== '') {
-      moduleDoc.theme_id = updateData.themeId; // CORRECTED: Schema uses "theme_id"
+      moduleDoc.theme_id = updateData.themeId;
+    }
+    
+    if (updateData.sectionName) {
+      // Store sectionName if your schema supports it
+      // This might be just for display purposes
     }
     
     // Only update sectionId if it has a non-empty value
     if (updateData.sectionId && updateData.sectionId.trim() !== '') {
-      moduleDoc.section_id = updateData.sectionId; // CORRECTED: Schema uses "section_id"
+      moduleDoc.section_id = updateData.sectionId;
     }
     
     // Check if the update includes video fields.
     if (updateData.video) {
       if (moduleDoc.video) {
         try {
+          // First, retrieve the video document
           const videoDoc = await Video.findById(moduleDoc.video);
           if (videoDoc) {
-            console.log("Current video in DB:", JSON.stringify({
-              videoUrl: videoDoc.video_url, // Assuming Video schema uses video_url
+            console.log("Current video in DB before update:", JSON.stringify({
+              video_url: videoDoc.video_url,
               learnedSkills: videoDoc.learnedSkills
             }, null, 2));
             
+            // Update video URL if provided
             if (updateData.video.videoUrl) {
-              videoDoc.video_url = updateData.video.videoUrl; // Update using video schema field
+              // Determine the correct field name in your Video schema
+              // It could be video_url, videoUrl, or url - adjust as needed
+              videoDoc.video_url = updateData.video.videoUrl;
             }
               
+            // *** CRITICAL FIX FOR SKILLS ***
+            // Ensure we're properly updating the skills array
             if (updateData.video.learnedSkills && Array.isArray(updateData.video.learnedSkills)) {
-              // Ensure learnedSkills is correctly formatted
-              videoDoc.learnedSkills = updateData.video.learnedSkills;
-              console.log("Updated learnedSkills:", JSON.stringify(videoDoc.learnedSkills, null, 2));
+              // Replace the entire skills array with the new one
+              // Make sure we're using exactly the format expected by your schema
+              videoDoc.learnedSkills = [...updateData.video.learnedSkills];
+              
+              // Log the new skills for debugging
+              console.log("Updated learnedSkills array:", JSON.stringify(videoDoc.learnedSkills, null, 2));
             }
             
-            // Save the video document
-            await videoDoc.save();
-            console.log("Video saved successfully");
+            // Save the video document FIRST - this is important!
+            const savedVideo = await videoDoc.save();
+            console.log("Video saved successfully with ID:", savedVideo._id);
+            console.log("Updated video data:", JSON.stringify({
+              video_url: savedVideo.video_url,
+              learnedSkills: savedVideo.learnedSkills
+            }, null, 2));
+            
           } else {
             console.log("Video document not found for ID:", moduleDoc.video);
           }
         } catch (videoError) {
           console.error("Error updating video:", videoError);
-          // Continue with module update even if video update fails.
+          return res.status(500).json({ 
+            message: "Error updating video details",
+            error: videoError.message
+          });
         }
       } else {
         console.log("Module has no associated video document");
       }
     }
     
-    // Save the updated module.
-    await moduleDoc.save();
-    console.log("Module saved successfully");
+    // Save the module document AFTER the video is saved
+    const savedModule = await moduleDoc.save();
+    console.log("Module saved successfully with ID:", savedModule._id);
     
-    // We need to fetch the fresh module with populated fields to return a complete response
-    const updatedModule = await Module.findById(moduleId)
-      .populate('video')
-      .populate('theme_id', 'name') // Assuming themes have a name field
-      .populate('section_id', 'name'); // Assuming sections have a name field
+    // Verify the update by fetching the fresh module data with populated fields
+    const updatedModule = await Module.findById(moduleId).populate({
+      path: 'video',
+      select: 'video_url learnedSkills' // Add other video fields you need
+    });
     
-    // Construct a comprehensive response that includes all the data the frontend needs
-    const fullResponse = {
+    // Check if the skills were actually saved
+    if (updatedModule.video) {
+      console.log("VERIFICATION - Skills in DB after update:", 
+        JSON.stringify(updatedModule.video.learnedSkills, null, 2));
+    }
+    
+    // Build a response with the updated data
+    const response = {
       _id: updatedModule._id,
       unique_ModuleID: updatedModule.unique_ModuleID,
       moduleName: updatedModule.name,
-      description: updatedModule.description,
-      themeId: updatedModule.theme_id?._id || updatedModule.theme_id,
-      themeName: updatedModule.theme_id?.name || updateData.themeName,
-      sectionId: updatedModule.section_id?._id || updatedModule.section_id,
-      sectionName: updatedModule.section_id?.name || updateData.sectionName,
-      prerequisites: updatedModule.prerequisites || [],
-      createdAt: updatedModule.createdAt,
-      updatedAt: updatedModule.updatedAt,
-      video: updatedModule.video 
-        ? {
-            _id: updatedModule.video._id,
-            videoUrl: updatedModule.video.video_url,
-            learnedSkills: updatedModule.video.learnedSkills || [],
-            // Include other video fields here based on your Video schema
-          } 
-        : null
+      themeId: updatedModule.theme_id,
+      themeName: updateData.themeName,
+      sectionId: updatedModule.section_id,
+      sectionName: updateData.sectionName,
+      video: updatedModule.video ? {
+        _id: updatedModule.video._id,
+        videoUrl: updatedModule.video.video_url,
+        learnedSkills: updatedModule.video.learnedSkills || []
+      } : null
     };
     
-    // Return the updated module with all fields
     return res.status(200).json({
       message: "Module updated successfully",
-      module: fullResponse
+      module: response
     });
+    
   } catch (error) {
     console.error("Error updating module:", error);
     return res.status(500).json({
