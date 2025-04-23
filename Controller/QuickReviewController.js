@@ -115,22 +115,84 @@ exports.storeQuickReviewScore = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid score: must be a number." });
     }
 
-    // Upsert the UserProgress document for this user
-    const progress = await UserProgress.findOneAndUpdate(
-      { user_id: userId },
-      { quickreviewScore: score },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
+    // 1) Upsert the UserProgress doc
+    let progress = await UserProgress.findOne({ user_id: userId });
+    if (!progress) {
+      progress = await UserProgress.create({
+        user_id: userId,
+        quickreviewScore: score
+      });
+    } else {
+      progress.quickreviewScore = score;
+    }
+
+    // 2) If the score passes the threshold, award 10 points everywhere
+    if (score >= 7) {
+      const award = 10;
+      progress.points = (progress.points || 0) + award;
+
+      const now = new Date();
+
+      // — daily_points —
+      {
+        const todayKey = now.toISOString().split("T")[0];
+        let day = progress.daily_points.find(d => d.date.toISOString().split("T")[0] === todayKey);
+        if (day) {
+          day.points += award;
+        } else {
+          progress.daily_points.push({ date: now, points: award });
+        }
+      }
+
+      // — weekly_points (Monday–Sunday) —
+      {
+        const dayOfWeek = now.getDay();           // 0=Sun,1=Mon...
+        const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() + diffToMon);
+        weekStart.setHours(0,0,0,0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23,59,59,999);
+
+        let wk = progress.weekly_points.find(w =>
+          w.weekStart.getTime() === weekStart.getTime() &&
+          w.weekEnd  .getTime() === weekEnd  .getTime()
+        );
+        if (wk) {
+          wk.points += award;
+        } else {
+          progress.weekly_points.push({ weekStart, weekEnd, points: award });
+        }
+      }
+
+      // — monthly_points (YYYY-MM) —
+      {
+        const year  = now.getFullYear();
+        const month = String(now.getMonth()+1).padStart(2,"0");
+        const key   = `${year}-${month}`;
+        let mo = progress.monthly_points.find(m => m.month === key);
+        if (mo) {
+          mo.points += award;
+        } else {
+          progress.monthly_points.push({ month: key, points: award });
+        }
+      }
+    }
+
+    // 3) Persist
+    await progress.save();
 
     return res.json({
       message: "Quick review score saved",
-      quickreviewScore: progress.quickreviewScore
+      quickreviewScore: progress.quickreviewScore,
+      totalPoints:      progress.points
     });
   } catch (err) {
     console.error("Error storing quick review score:", err);
     return res.status(500).json({
       message: "Failed to store quick review score",
-      error: err.message
+      error:   err.message
     });
   }
 };
