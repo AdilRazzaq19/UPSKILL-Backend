@@ -406,15 +406,31 @@ const updateModuleforAdmin = async (req, res) => {
       return res.status(404).json({ message: "Module not found." });
     }
     
-    console.log("Current module in DB:", JSON.stringify(moduleDoc, null, 2));
+    console.log("Current module in DB:", JSON.stringify({
+      id: moduleDoc._id,
+      moduleName: moduleDoc.name, // CORRECTED: Schema uses "name", not "moduleName"
+      themeName: updateData.themeName, // Not directly in schema, but we can include for response
+      themeId: moduleDoc.theme_id, // CORRECTED: Schema uses "theme_id", not "themeId"
+      sectionName: updateData.sectionName, // Not directly in schema, but we can include for response
+      sectionId: moduleDoc.section_id, // CORRECTED: Schema uses "section_id", not "sectionId"
+      video: moduleDoc.video
+    }, null, 2));
     
-    // FIXED: Update top-level module fields with correct field names
-    // Check your MongoDB schema for the exact field names
-    if (updateData.moduleName) moduleDoc.moduleName = updateData.moduleName;
-    if (updateData.themeName) moduleDoc.themeName = updateData.themeName;
-    if (updateData.themeId) moduleDoc.themeId = updateData.themeId;
-    if (updateData.sectionName) moduleDoc.sectionName = updateData.sectionName;
-    if (updateData.sectionId) moduleDoc.sectionId = updateData.sectionId;
+    // FIXED: Update top-level module fields with correct field names that match the schema
+    // Use more robust checks to prevent empty values from overwriting existing data
+    if (updateData.moduleName) {
+      moduleDoc.name = updateData.moduleName; // CORRECTED: Schema uses "name"
+    }
+    
+    // Only update themeId if it has a non-empty value
+    if (updateData.themeId && updateData.themeId.trim() !== '') {
+      moduleDoc.theme_id = updateData.themeId; // CORRECTED: Schema uses "theme_id"
+    }
+    
+    // Only update sectionId if it has a non-empty value
+    if (updateData.sectionId && updateData.sectionId.trim() !== '') {
+      moduleDoc.section_id = updateData.sectionId; // CORRECTED: Schema uses "section_id"
+    }
     
     // Check if the update includes video fields.
     if (updateData.video) {
@@ -422,12 +438,16 @@ const updateModuleforAdmin = async (req, res) => {
         try {
           const videoDoc = await Video.findById(moduleDoc.video);
           if (videoDoc) {
-            console.log("Current video in DB:", JSON.stringify(videoDoc, null, 2));
+            console.log("Current video in DB:", JSON.stringify({
+              videoUrl: videoDoc.video_url, // Assuming Video schema uses video_url
+              learnedSkills: videoDoc.learnedSkills
+            }, null, 2));
             
-            if (updateData.video.videoUrl)
-              videoDoc.videoUrl = updateData.video.videoUrl; // FIXED: field name should match schema
+            if (updateData.video.videoUrl) {
+              videoDoc.video_url = updateData.video.videoUrl; // Update using video schema field
+            }
               
-            if (updateData.video.learnedSkills) {
+            if (updateData.video.learnedSkills && Array.isArray(updateData.video.learnedSkills)) {
               // Ensure learnedSkills is correctly formatted
               videoDoc.learnedSkills = updateData.video.learnedSkills;
               console.log("Updated learnedSkills:", JSON.stringify(videoDoc.learnedSkills, null, 2));
@@ -452,9 +472,39 @@ const updateModuleforAdmin = async (req, res) => {
     await moduleDoc.save();
     console.log("Module saved successfully");
     
+    // We need to fetch the fresh module with populated fields to return a complete response
+    const updatedModule = await Module.findById(moduleId)
+      .populate('video')
+      .populate('theme_id', 'name') // Assuming themes have a name field
+      .populate('section_id', 'name'); // Assuming sections have a name field
+    
+    // Construct a comprehensive response that includes all the data the frontend needs
+    const fullResponse = {
+      _id: updatedModule._id,
+      unique_ModuleID: updatedModule.unique_ModuleID,
+      moduleName: updatedModule.name,
+      description: updatedModule.description,
+      themeId: updatedModule.theme_id?._id || updatedModule.theme_id,
+      themeName: updatedModule.theme_id?.name || updateData.themeName,
+      sectionId: updatedModule.section_id?._id || updatedModule.section_id,
+      sectionName: updatedModule.section_id?.name || updateData.sectionName,
+      prerequisites: updatedModule.prerequisites || [],
+      createdAt: updatedModule.createdAt,
+      updatedAt: updatedModule.updatedAt,
+      video: updatedModule.video 
+        ? {
+            _id: updatedModule.video._id,
+            videoUrl: updatedModule.video.video_url,
+            learnedSkills: updatedModule.video.learnedSkills || [],
+            // Include other video fields here based on your Video schema
+          } 
+        : null
+    };
+    
+    // Return the updated module with all fields
     return res.status(200).json({
       message: "Module updated successfully",
-      module: moduleDoc,
+      module: fullResponse
     });
   } catch (error) {
     console.error("Error updating module:", error);
