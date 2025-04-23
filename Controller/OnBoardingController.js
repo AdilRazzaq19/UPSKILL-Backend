@@ -29,7 +29,7 @@ const createOnBoarding = async (req, res) => {
       return res.status(400).json({ message: "Goals cannot exceed 3 items." });
     }
 
-    const roleBoolean = !!role; 
+    const roleBoolean = role; 
 
     const existingOnboarding = await Onboarding.findOne({ user_id });
     if (existingOnboarding) {
