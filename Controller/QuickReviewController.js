@@ -2,6 +2,7 @@
 const axios              = require("axios");
 const Video              = require("../Models/Video");
 const QuickReviewStatement   = require("../Models/QuickReviewStatement");
+const UserProgress         = require("../Models/userProgress");
 
 exports.storeQuickReview = async (req, res, next) => {
   const video_id = req.params.video_id;
@@ -104,3 +105,34 @@ exports.getQuickReviewStatements = async (req, res, next) => {
     });
   }
 };
+
+exports.storeQuickReviewScore = async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const { score } = req.body;
+
+    if (typeof score !== "number") {
+      return res.status(400).json({ message: "Invalid score: must be a number." });
+    }
+
+    // Upsert the UserProgress document for this user
+    const progress = await UserProgress.findOneAndUpdate(
+      { user_id: userId },
+      { quickreviewScore: score },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return res.json({
+      message: "Quick review score saved",
+      quickreviewScore: progress.quickreviewScore
+    });
+  } catch (err) {
+    console.error("Error storing quick review score:", err);
+    return res.status(500).json({
+      message: "Failed to store quick review score",
+      error: err.message
+    });
+  }
+};
+
+

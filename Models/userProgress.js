@@ -79,6 +79,10 @@ const UserProgressSchema = new Schema(
       type: Object,
       default: {}
     },
+    quickreviewScore:{
+      type:Number,default:0
+    },
+    
   },
   { timestamps: true }
 );
