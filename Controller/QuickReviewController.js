@@ -70,3 +70,37 @@ exports.storeQuickReview = async (req, res, next) => {
     });
   }
 };
+
+exports.getQuickReviewStatements = async (req, res, next) => {
+  const video_id = req.params.video_id;
+  
+  try {
+    // Find the Video document by YouTube ID
+    const video = await Video.findOne({ youtubeVideo_id: video_id });
+    
+    if (!video) {
+      return res.status(404).json({ 
+        message: "Video not found with the provided YouTube ID" 
+      });
+    }
+    
+    // Find the QuickReviewStatement document associated with the video
+    const quickReview = await QuickReviewStatement.findOne({ video: video._id });
+    
+    if (!quickReview) {
+      return res.status(404).json({ 
+        message: "No review statements found for this video" 
+      });
+    }
+    
+    // Return the statements array
+    return res.json(quickReview.statements);
+  } 
+  catch (err) {
+    console.error("Error retrieving quick review statements:", err);
+    return res.status(500).json({
+      message: "Failed to retrieve quick review statements",
+      error: err.message
+    });
+  }
+};
