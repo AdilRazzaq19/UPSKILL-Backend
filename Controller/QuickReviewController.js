@@ -115,16 +115,17 @@ exports.storeQuickReviewScore = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid score: must be a number." });
     }
 
-    if (!moduleId) {
-      return res.status(400).json({ message: "moduleId is required." });
-    }
-
     // 1) Upsert the UserProgress doc
     let progress = await UserProgress.findOne({ user_id: userId });
     if (!progress) {
-      progress = await UserProgress.create({
+      // Create new progress document
+      const newProgress = {
         user_id: userId,
-        module_scores: [{
+      };
+
+      // Only add module_scores if moduleId is provided
+      if (moduleId) {
+        newProgress.module_scores = [{
           module_id: moduleId,
           quickreview_score: score,
           quickreview_attempts: 1,
@@ -134,41 +135,42 @@ exports.storeQuickReviewScore = async (req, res, next) => {
             score: score,
             date: new Date()
           }]
-        }]
-      });
+        }];
+      }
+
+      progress = await UserProgress.create(newProgress);
     } else {
+      if (moduleId) {
+        const moduleScoreIndex = progress.module_scores.findIndex(
+          ms => ms.module_id.toString() === moduleId
+        );
 
-      // Find or create the module score document
-      const moduleScoreIndex = progress.module_scores.findIndex(
-        ms => ms.module_id.toString() === moduleId
-      );
-
-      if (moduleScoreIndex === -1) {
-        // This is the first time scoring this module
-        progress.module_scores.push({
-          module_id: moduleId,
-          quickreview_score: score,
-          quickreview_attempts: 1,
-          quickreview_last_attempt_date: new Date(),
-          highest_quickreview_score: score,
-          quickreview_scores: [{
+        if (moduleScoreIndex === -1) {
+          progress.module_scores.push({
+            module_id: moduleId,
+            quickreview_score: score,
+            quickreview_attempts: 1,
+            quickreview_last_attempt_date: new Date(),
+            highest_quickreview_score: score,
+            quickreview_scores: [{
+              score: score,
+              date: new Date()
+            }]
+          });
+        } else {
+          const moduleScore = progress.module_scores[moduleScoreIndex];
+          
+          moduleScore.quickreview_score = score;
+          moduleScore.quickreview_attempts += 1;
+          moduleScore.quickreview_last_attempt_date = new Date();
+          if (score > moduleScore.highest_quickreview_score) {
+            moduleScore.highest_quickreview_score = score;
+          }
+          moduleScore.quickreview_scores.push({
             score: score,
             date: new Date()
-          }]
-        });
-      } else {
-        const moduleScore = progress.module_scores[moduleScoreIndex];
-        
-        moduleScore.quickreview_score = score;
-        moduleScore.quickreview_attempts += 1;
-        moduleScore.quickreview_last_attempt_date = new Date();
-        if (score > moduleScore.highest_quickreview_score) {
-          moduleScore.highest_quickreview_score = score;
+          });
         }
-        moduleScore.quickreview_scores.push({
-          score: score,
-          date: new Date()
-        });
       }
     }
     if (score >= 7) {
@@ -223,17 +225,25 @@ exports.storeQuickReviewScore = async (req, res, next) => {
         }
       }
     }
+    
     await progress.save();
 
-    const moduleScore = progress.module_scores.find(ms => ms.module_id.toString() === moduleId);
-
-    return res.json({
+    // Prepare response
+    const responseData = {
       message: "Quick review score saved",
-      moduleQuickReviewScore: moduleScore ? moduleScore.quickreview_score : score,
-      moduleQuickReviewAttempts: moduleScore ? moduleScore.quickreview_attempts : 1,
-      highestModuleQuickReviewScore: moduleScore ? moduleScore.highest_quickreview_score : score,
       totalPoints: progress.points
-    });
+    };
+
+    if (moduleId) {
+      const moduleScore = progress.module_scores.find(ms => ms.module_id.toString() === moduleId);
+      if (moduleScore) {
+        responseData.moduleQuickReviewScore = moduleScore.quickreview_score;
+        responseData.moduleQuickReviewAttempts = moduleScore.quickreview_attempts;
+        responseData.highestModuleQuickReviewScore = moduleScore.highest_quickreview_score;
+      }
+    }
+
+    return res.json(responseData);
   } catch (err) {
     console.error("Error storing quick review score:", err);
     return res.status(500).json({
