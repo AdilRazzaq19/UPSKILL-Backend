@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Quiz = require("../Models/VideoQuiz");
 const Video = require("../Models/Video");
+const UserProgress= require("../Models/userProgress");
 
 const storeQuiz = async (req, res) => {
   const video_id = req.params.video_id;
@@ -128,7 +129,88 @@ const storeQuiz = async (req, res) => {
     });
   }
 };
+
+const storeQuizScore = async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const { score, moduleId } = req.body;
+
+    if (typeof score !== "number") {
+      return res.status(400).json({ message: "Invalid score: must be a number." });
+    }
+
+    if (!moduleId) {
+      return res.status(400).json({ message: "moduleId is required." });
+    }
+
+    let progress = await UserProgress.findOne({ user_id: userId });
+    if (!progress) {
+      progress = await UserProgress.create({
+        user_id: userId,
+        module_scores: [{
+          module_id: moduleId,
+          quiz_score: score,
+          quiz_attempts: 1,
+          quiz_last_attempt_date: new Date(),
+          highest_quiz_score: score,
+          quiz_scores: [{
+            score: score,
+            date: new Date(),
+          }]
+        }]
+      });
+    } else {
+      const moduleScoreIndex = progress.module_scores.findIndex(
+        ms => ms.module_id.toString() === moduleId
+      );
+
+      if (moduleScoreIndex === -1) {
+        progress.module_scores.push({
+          module_id: moduleId,
+          quiz_score: score,
+          quiz_attempts: 1,
+          quiz_last_attempt_date: new Date(),
+          highest_quiz_score: score,
+          quiz_scores: [{
+            score: score,
+            date: new Date(),
+          }]
+        });
+      } else {
+        const moduleScore = progress.module_scores[moduleScoreIndex];
+        moduleScore.quiz_score = score;
+        moduleScore.quiz_attempts += 1;
+        moduleScore.quiz_last_attempt_date = new Date();
+        if (score > moduleScore.highest_quiz_score) {
+          moduleScore.highest_quiz_score = score;
+        }
+        moduleScore.quiz_scores.push({
+          score: score,
+          date: new Date(),
+        });
+      }
+    }
+    await progress.save();
+
+    const moduleScore = progress.module_scores.find(ms => ms.module_id.toString() === moduleId);
+
+    return res.json({
+      message: "Quiz score saved successfully",
+      moduleQuizScore: moduleScore.quiz_score,
+      moduleQuizAttempts: moduleScore.quiz_attempts,
+      highestModuleQuizScore: moduleScore.highest_quiz_score,
+      quizHistory: moduleScore.quiz_scores
+    });
+  } catch (err) {
+    console.error("Error storing quiz score:", err);
+    return res.status(500).json({
+      message: "Failed to store quiz score",
+      error: err.message
+    });
+  }
+};
 module.exports = {
   storeQuiz,
+  storeQuizScore
 };
 

@@ -7,6 +7,30 @@ const BadgeAwardSchema = new Schema({
   awarded_at: { type: Date, default: Date.now }
 });
 
+const ScoreAttemptSchema = new Schema({
+  score: { type: Number, required: true },
+  date: { type: Date, default: Date.now },
+});
+
+// Define a subdocument schema for module scores
+const ModuleScoreSchema = new Schema({
+  module_id: { type: Schema.Types.ObjectId, ref: "Module", required: true },
+  
+  quiz_score: { type: Number, default: 0 }, 
+  quiz_attempts: { type: Number, default: 0 },
+  quiz_last_attempt_date: { type: Date },
+  highest_quiz_score: { type: Number, default: 0 },
+  
+  quiz_scores: [ScoreAttemptSchema],
+  
+  quickreview_score: { type: Number, default: 0 },
+  quickreview_attempts: { type: Number, default: 0 },
+  quickreview_last_attempt_date: { type: Date },
+  highest_quickreview_score: { type: Number, default: 0 },
+  
+  quickreview_scores: [ScoreAttemptSchema],
+});
+
 const UserProgressSchema = new Schema(
   {
     user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -79,9 +103,8 @@ const UserProgressSchema = new Schema(
       type: Object,
       default: {}
     },
-    quickreviewScore:{
-      type:Number,default:0
-    },
+    module_scores: [ModuleScoreSchema],
+
     
   },
   { timestamps: true }

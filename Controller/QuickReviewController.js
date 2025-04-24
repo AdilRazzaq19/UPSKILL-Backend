@@ -109,10 +109,14 @@ exports.getQuickReviewStatements = async (req, res, next) => {
 exports.storeQuickReviewScore = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const { score } = req.body;
+    const { score, moduleId } = req.body;
 
     if (typeof score !== "number") {
       return res.status(400).json({ message: "Invalid score: must be a number." });
+    }
+
+    if (!moduleId) {
+      return res.status(400).json({ message: "moduleId is required." });
     }
 
     // 1) Upsert the UserProgress doc
@@ -120,13 +124,53 @@ exports.storeQuickReviewScore = async (req, res, next) => {
     if (!progress) {
       progress = await UserProgress.create({
         user_id: userId,
-        quickreviewScore: score
+        module_scores: [{
+          module_id: moduleId,
+          quickreview_score: score,
+          quickreview_attempts: 1,
+          quickreview_last_attempt_date: new Date(),
+          highest_quickreview_score: score,
+          quickreview_scores: [{
+            score: score,
+            date: new Date()
+          }]
+        }]
       });
     } else {
-      progress.quickreviewScore = score;
-    }
 
-    // 2) If the score passes the threshold, award 10 points everywhere
+      // Find or create the module score document
+      const moduleScoreIndex = progress.module_scores.findIndex(
+        ms => ms.module_id.toString() === moduleId
+      );
+
+      if (moduleScoreIndex === -1) {
+        // This is the first time scoring this module
+        progress.module_scores.push({
+          module_id: moduleId,
+          quickreview_score: score,
+          quickreview_attempts: 1,
+          quickreview_last_attempt_date: new Date(),
+          highest_quickreview_score: score,
+          quickreview_scores: [{
+            score: score,
+            date: new Date()
+          }]
+        });
+      } else {
+        const moduleScore = progress.module_scores[moduleScoreIndex];
+        
+        moduleScore.quickreview_score = score;
+        moduleScore.quickreview_attempts += 1;
+        moduleScore.quickreview_last_attempt_date = new Date();
+        if (score > moduleScore.highest_quickreview_score) {
+          moduleScore.highest_quickreview_score = score;
+        }
+        moduleScore.quickreview_scores.push({
+          score: score,
+          date: new Date()
+        });
+      }
+    }
     if (score >= 7) {
       const award = 10;
       progress.points = (progress.points || 0) + award;
@@ -146,7 +190,7 @@ exports.storeQuickReviewScore = async (req, res, next) => {
 
       // — weekly_points (Monday–Sunday) —
       {
-        const dayOfWeek = now.getDay();           // 0=Sun,1=Mon...
+        const dayOfWeek = now.getDay();         // 0=Sun,1=Mon...
         const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         const weekStart = new Date(now);
         weekStart.setDate(now.getDate() + diffToMon);
@@ -157,7 +201,7 @@ exports.storeQuickReviewScore = async (req, res, next) => {
 
         let wk = progress.weekly_points.find(w =>
           w.weekStart.getTime() === weekStart.getTime() &&
-          w.weekEnd  .getTime() === weekEnd  .getTime()
+          w.weekEnd.getTime() === weekEnd.getTime()
         );
         if (wk) {
           wk.points += award;
@@ -179,22 +223,23 @@ exports.storeQuickReviewScore = async (req, res, next) => {
         }
       }
     }
-
-    // 3) Persist
     await progress.save();
+
+    const moduleScore = progress.module_scores.find(ms => ms.module_id.toString() === moduleId);
 
     return res.json({
       message: "Quick review score saved",
-      quickreviewScore: progress.quickreviewScore,
-      totalPoints:      progress.points
+      moduleQuickReviewScore: moduleScore ? moduleScore.quickreview_score : score,
+      moduleQuickReviewAttempts: moduleScore ? moduleScore.quickreview_attempts : 1,
+      highestModuleQuickReviewScore: moduleScore ? moduleScore.highest_quickreview_score : score,
+      totalPoints: progress.points
     });
   } catch (err) {
     console.error("Error storing quick review score:", err);
     return res.status(500).json({
       message: "Failed to store quick review score",
-      error:   err.message
+      error: err.message
     });
   }
 };
-
 
