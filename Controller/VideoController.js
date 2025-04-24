@@ -200,32 +200,56 @@ const getVideoDetails = async (req, res) => {
       
       return res.status(200).json(existingVideo);
     }
+    
+    // First get video details
     const apiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${youtubeVideo_id}&part=snippet,statistics,contentDetails&key=${API_KEY}`;
     const response = await axios.get(apiUrl);
+    
     const data = response.data;
     if (!data.items || !data.items.length) {
       return res.status(404).json({ error: "Video not found on YouTube." });
     }
-
+    
     const videoData = data.items[0];
     const snippet = videoData.snippet || {};
+    const channelId = snippet.channelId;
+    
+    // Now get channel details using the channelId
+    const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${API_KEY}`;
+    const channelResponse = await axios.get(channelApiUrl);
+    
+    if (
+      !channelResponse.data.items ||
+      channelResponse.data.items.length === 0 ||
+      !channelResponse.data.items[0].snippet ||
+      !channelResponse.data.items[0].snippet.thumbnails
+    ) {
+      return res.status(404).json({ error: "Channel details not found." });
+    }
+    
+    const channelSnippet = channelResponse.data.items[0].snippet;
     const stats = videoData.statistics || {};
     const content = videoData.contentDetails || {};
     const durationParsed = iso8601.parse(content.duration || "PT0M0S");
     const formattedDuration = `${durationParsed.minutes || 0}:${
       durationParsed.seconds ? durationParsed.seconds.toString().padStart(2, "0") : "00"
     }`;
-
+    
+    const profileImageUrl = channelSnippet.thumbnails.high
+      ? channelSnippet.thumbnails.high.url
+      : channelSnippet.thumbnails.default.url;
+      
     const views = parseInt(stats.viewCount || "0", 10);
     const likes = parseInt(stats.likeCount || "0", 10);
     const comments = parseInt(stats.commentCount || "0", 10);
     const engagementScore = views ? ((likes + comments) / views * 100).toFixed(2) : "0";
+    
     const newVideoData = {
       youtubeVideo_id,
       title: snippet.title,
       description: snippet.description,
       video_url: videoUrl,
-      channel_id: snippet.channelId,
+      channel_id: channelId,
       channel_name: snippet.channelTitle,
       likes_count: likes,
       comments_count: comments,
@@ -234,14 +258,17 @@ const getVideoDetails = async (req, res) => {
       publish_date: snippet.publishedAt ? snippet.publishedAt.split("T")[0] : null,
       category: snippet.categoryId,
       engagement_score: engagementScore,
+      channel_profile_image: profileImageUrl,
       tags: tags || []
     };
 
     if (module_id) {
       newVideoData.module_id = module_id;
     }
+    
     const newVideo = new Video(newVideoData);
     await newVideo.save();
+    
     if (module_id) {
       const mod = await Module.findById(module_id);
       if (!mod) {
@@ -260,7 +287,47 @@ const getVideoDetails = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
+const updateChannelProfileImageForVideo = async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ error: "Video not found." });
+    }
+    if (!video.channel_id) {
+      return res.status(400).json({ error: "Channel ID missing from video." });
+    }
+    
+    // Call YouTube Channels API to get the channel details including the profile image.
+    const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${video.channel_id}&key=${API_KEY}`;
+    const response = await axios.get(channelApiUrl);
+    
+    if (
+      !response.data.items ||
+      response.data.items.length === 0 ||
+      !response.data.items[0].snippet ||
+      !response.data.items[0].snippet.thumbnails
+    ) {
+      return res.status(404).json({ error: "Channel details not found." });
+    }
+    
+    const channelSnippet = response.data.items[0].snippet;
+    const profileImageUrl = channelSnippet.thumbnails.high
+      ? channelSnippet.thumbnails.high.url
+      : channelSnippet.thumbnails.default.url;
+    video.channel_profile_image = profileImageUrl;
+    await video.save();
+    
+    return res.status(200).json({
+      message: "Channel profile image updated successfully.",
+      videoId: video._id,
+      channel_profile_image: video.channel_profile_image,
+    });
+  } catch (error) {
+    console.error("Error updating channel profile image:", error.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 const updateVideoTags = async (req, res) => {
   try {
     const { videoId } = req.params;  
@@ -430,47 +497,7 @@ const searchModulesBySkill = async (req, res) => {
 };
 
 
-const updateChannelProfileImageForVideo = async (req, res) => {
-  try {
-    const { videoId } = req.params;
-    const video = await Video.findById(videoId);
-    if (!video) {
-      return res.status(404).json({ error: "Video not found." });
-    }
-    if (!video.channel_id) {
-      return res.status(400).json({ error: "Channel ID missing from video." });
-    }
-    
-    // Call YouTube Channels API to get the channel details including the profile image.
-    const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${video.channel_id}&key=${API_KEY}`;
-    const response = await axios.get(channelApiUrl);
-    
-    if (
-      !response.data.items ||
-      response.data.items.length === 0 ||
-      !response.data.items[0].snippet ||
-      !response.data.items[0].snippet.thumbnails
-    ) {
-      return res.status(404).json({ error: "Channel details not found." });
-    }
-    
-    const channelSnippet = response.data.items[0].snippet;
-    const profileImageUrl = channelSnippet.thumbnails.high
-      ? channelSnippet.thumbnails.high.url
-      : channelSnippet.thumbnails.default.url;
-    video.channel_profile_image = profileImageUrl;
-    await video.save();
-    
-    return res.status(200).json({
-      message: "Channel profile image updated successfully.",
-      videoId: video._id,
-      channel_profile_image: video.channel_profile_image,
-    });
-  } catch (error) {
-    console.error("Error updating channel profile image:", error.message);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
+
 
 const getQuizzesByYoutubeVideoId = async (req, res) => {
   try {
