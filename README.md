@@ -1,4 +1,4 @@
-# UPSKILL-Backend
+# UpSkillMe.AI - Backend
 
 Backend services for the UPSKILL platform, providing APIs for user authentication, course management, progress tracking, and more.
 
