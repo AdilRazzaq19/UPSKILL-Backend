@@ -1,68 +1,108 @@
-const axios = require('axios');
+const mongoose = require('mongoose');
 const FlashcardResponse = require('../Models/FlashCard');
 const Video = require('../Models/Video');
 
 const storeFlashcards = async (req, res) => {
-  const video_id = req.params.video_id;
+  const { video_id } = req.params;
+
+  if (!video_id) {
+    return res.status(400).json({
+      success: false,
+      message: 'Video ID is required'
+    });
+  }
 
   try {
-    // Fetch flashcard data from the external API
-    const response = await axios.get("http://15.237.7.12/v2/notes/", {
-      params: { video_id }
-    });
+    console.log(`Storing flashcards for video ID: ${video_id}`);
+    const client = mongoose.connection.client;
+    const upskillDb = client.db('upskill');
 
-    let flashcardArray = [];
-    if (Array.isArray(response.data)) {
-      flashcardArray = response.data;
-    } else if (response.data && Array.isArray(response.data.notes)) {
-      flashcardArray = response.data.notes;
-    } else {
-      return res.status(400).json({ message: "Invalid flashcard data format from external API" });
+    // Ensure notes collection exists
+    const collections = await upskillDb.listCollections().toArray();
+    const notesCollName = 'upskill_model.notes';
+    if (!collections.some(c => c.name === notesCollName)) {
+      return res.status(404).json({
+        success: false,
+        message: `Notes collection "${notesCollName}" not found`,
+        available: collections.map(c => c.name)
+      });
     }
 
-    // For each flashcard object (which represents one section) update or create a document.
-    const flashcardDocs = [];
-    for (const fc of flashcardArray) {
-      // Ensure that the section is provided; it should be one of the allowed values.
-      const section = fc.section || "";
-      if (!section) continue; // Skip if no section is provided
+    const notesCollection = upskillDb.collection(notesCollName);
+    const total = await notesCollection.countDocuments();
+    if (total === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Notes collection "${notesCollName}" is empty`
+      });
+    }
 
-      // Check if a document for this video and section already exists
-      let flashcardDoc = await FlashcardResponse.findOne({ video_id, section });
-      if (flashcardDoc) {
-        // Update the existing document's transcription_id and content
-        flashcardDoc.transcription_id = fc.transcription_id || flashcardDoc.transcription_id;
-        flashcardDoc.content = fc.content || flashcardDoc.content;
-        await flashcardDoc.save();
-      } else {
-        // Create a new document for the section
-        flashcardDoc = new FlashcardResponse({
-          video_id,
-          transcription_id: fc.transcription_id || "",
-          section,
-          content: fc.content || ""
-        });
-        await flashcardDoc.save();
+    // Fetch all note docs for this video_id (with fallbacks)
+    let noteDocs = await notesCollection.find({ video_id }).toArray();
+    if (noteDocs.length === 0) {
+      const altFields = ['youtubeVideo_id', 'videoId', 'youtube_id'];
+      for (const f of altFields) {
+        noteDocs = await notesCollection.find({ [f]: video_id }).toArray();
+        if (noteDocs.length) break;
       }
-      flashcardDocs.push(flashcardDoc);
     }
+
+    if (noteDocs.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No notes found for video ID ${video_id}`
+      });
+    }
+
+    // Upsert each note into FlashcardResponse
+    const flashcardDocs = [];
+    for (const note of noteDocs) {
+      const section = note.section || '';
+      if (!section) continue;
+
+      const transcription_id = note.transcription_id || '';
+      const content = note.content || '';
+
+      let fc = await FlashcardResponse.findOne({ video_id, section });
+      if (fc) {
+        fc.transcription_id = transcription_id;
+        fc.content = content;
+        await fc.save();
+      } else {
+        fc = await FlashcardResponse.create({
+          video_id,
+          transcription_id,
+          section,
+          content
+        });
+      }
+      flashcardDocs.push(fc);
+    }
+
+    // Link flashcards array to the Video
     const video = await Video.findOne({ youtubeVideo_id: video_id });
     if (!video) {
-      return res.status(404).json({ message: "Video not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: `Video with youtubeVideo_id "${video_id}" not found`
+      });
     }
-    video.flashcards = flashcardDocs.map(doc => doc._id);
+
+    video.flashcards = flashcardDocs.map(d => d._id);
     await video.save();
 
-    res.status(200).json({
-      message: "Flashcards (introduction, key_learnings, summary_points) stored successfully and linked to video",
-      flashcards: flashcardDocs,
-      count: flashcardDocs.length
+    return res.status(200).json({
+      success: true,
+      message: 'Flashcards stored and linked successfully',
+      count: flashcardDocs.length,
+      flashcards: flashcardDocs
     });
-  } catch (error) {
-    console.error("Error storing flashcards:", error);
-    res.status(500).json({
-      message: "Failed to store flashcards",
-      error: error.message
+  } catch (err) {
+    console.error('Error storing flashcards:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to store flashcards',
+      error: err.message
     });
   }
 };

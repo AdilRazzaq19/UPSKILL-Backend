@@ -68,12 +68,10 @@ const UserSchema = new Schema(
         return this.authMethod === "apple";
       },
     },
-    // Link to UserProgress Document
     userProgress: {
       type: Schema.Types.ObjectId,
       ref: "UserProgress",
     },
-    // Activity & Meta Data
     lastLogin: {
       type: Date,
       default: Date.now,
